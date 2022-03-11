@@ -1,4 +1,127 @@
 // Responsive Geometric Alphabet
+
+// モードの設定
+const RGAmode = {
+  line: "line-per-word", // 改行モード
+  valign: "baseline", // 行揃え
+  charHeight: "random" // 文字の高さ "random", "full"
+}
+
+// 文字を組む
+const composeRGA = (givenText, _r) => {
+  // テキスト処理 行に分割して配列化
+  let lines = [];
+  let lineCount = 0;
+  for (const char in givenText) {
+    if (!lines[lineCount]) {
+      lines[lineCount] = "";
+    }
+    // 改行モードによって処理を分岐
+    switch(RGAmode.line) {
+      case("line-per-word"): // 単語ごとに分割する場合
+        if (givenText[char].match(/\s+/)) {
+          lineCount++;
+        } else {
+          lines[lineCount] += givenText[char];
+        }
+        if (givenText[char].match(/[.,!?]/g)) {
+          lineCount++;
+        }
+        break;
+      case("line-per-sentence"):
+        lines[lineCount] += givenText[char];
+        if (givenText[char].match(/[.,!?]/g)) {
+          lineCount++;
+        }
+        break;
+      default:
+        break;
+    }
+  }
+  // 文字を並べる
+  let posX = 0;
+  let posY = 0;
+  // let lineHeight = 0;
+  let option = "outline";
+  let weight, strokeWeight, maxUX, maxUY, offsetX, offsetY, innerGap;
+  let step;
+  let rand = random(1) > 0.5;
+
+  // lは行数
+  let lineLengths = [];
+  for (const n in lines) {
+    lineLengths.push(lines[n].length);
+  }
+  let maxLength = lineLengths.reduce(function(a, b) {
+    return Math.max(a, b);
+  });
+  console.log(maxLength);
+  weight = int(random(2, width / (maxLength + 1) / 6));
+  const lineHeight = (height + weight) / lines.length;
+
+  for (let l = 0;l < lines.length;l++) {
+
+    if (rand) {
+      option = "outline";
+      rand = false;
+    } else {
+      option = "normal";
+      rand = true;
+    }
+    for (let c = 0;c < lines[l].length;c++) {
+      if (RGAmode.line == "line-per-word") {
+        maxUX = (width - (weight * (lines[l].length - 1))) / lines[l].length / weight;
+      }
+      if (RGAmode.charHeight == "random") {
+        maxUY = random(5, (lineHeight - weight) / weight);
+      } else {
+        maxUY = (lineHeight - weight) / weight;
+      }
+
+      offsetX = weight * maxUX + weight;
+      offsetY = weight * maxUY + weight;
+      strokeWeight = weight / 2;
+      innerGap = lineHeight - (weight * maxUY) - weight;
+
+      // 確認用
+      // textMask1.noFill();
+      // textMask1.stroke(112);
+      // textMask1.rect(posX, posY, maxUX * weight, lineHeight - weight);
+      // textMask1.line(posX - weight / 2, posY + innerGap, posX + maxUX * weight + weight / 2, posY + innerGap);
+
+      styleSelected = "rounded";
+      RGAs[l] = new RGAlphabet(lines[l][c], weight, maxUX, maxUY, styleSelected, option, strokeWeight, _r);
+      _r.push();
+      if (RGAmode.valign == "baseline") {
+        posY += innerGap;
+      }
+      _r.translate(posX, posY);
+      RGAs[l].print();
+      _r.pop();
+      posX += offsetX;
+      if (RGAmode.valign == "baseline") {
+        posY -= innerGap;
+      }
+
+      if (RGAmode.line == "line-per-sentence") {
+        if (posX > width) {
+          posX = 0;
+          posY += lineHeight;
+        }
+      }
+    }
+    if (RGAmode.line == "line-per-word") {
+      posX = 0;
+      posY += lineHeight;
+    } else {
+      posX += offsetX / 2;
+    }
+  }
+}
+
+// RGAインスタンスを入れる配列を用意
+const RGAs = new Array();
+
 class RGAlphabet {
   constructor(_char, _u, _maxUX, _maxUY, _style, _option, _strokeWeight, _r) {
     this.char = _char;
@@ -11,6 +134,7 @@ class RGAlphabet {
     this.r = _r;
     this.parts = [];
   }
+  // 文字を生成して格納
   generate() {
     const u = this.u;
     this.parts.length = 0;
