@@ -1,5 +1,8 @@
 // Responsive Geometric Alphabet
 
+// RGAインスタンスを入れる配列を用意
+const RGAs = new Array();
+
 // モードの設定
 const RGAmode = {
   line: "line-per-word", // 改行モード
@@ -8,7 +11,11 @@ const RGAmode = {
 }
 
 // 文字を組む
-const composeRGA = (givenText, _r) => {
+const composeRGA = (givenText, posX, posY, option, _r) => {
+  if (_r === undefined) {
+  } else {
+    
+  }
   // テキスト処理 行に分割して配列化
   let lines = [];
   let lineCount = 0;
@@ -39,10 +46,6 @@ const composeRGA = (givenText, _r) => {
     }
   }
   // 文字を並べる
-  let posX = 0;
-  let posY = 0;
-  // let lineHeight = 0;
-  let option = "outline";
   let weight, strokeWeight, maxUX, maxUY, offsetX, offsetY, innerGap;
   let step;
   let rand = random(1) > 0.5;
@@ -60,14 +63,6 @@ const composeRGA = (givenText, _r) => {
   const lineHeight = (height + weight) / lines.length;
 
   for (let l = 0;l < lines.length;l++) {
-
-    if (rand) {
-      option = "outline";
-      rand = false;
-    } else {
-      option = "normal";
-      rand = true;
-    }
     for (let c = 0;c < lines[l].length;c++) {
       if (RGAmode.line == "line-per-word") {
         maxUX = (width - (weight * (lines[l].length - 1))) / lines[l].length / weight;
@@ -90,7 +85,7 @@ const composeRGA = (givenText, _r) => {
       // textMask1.line(posX - weight / 2, posY + innerGap, posX + maxUX * weight + weight / 2, posY + innerGap);
 
       styleSelected = "rounded";
-      RGAs[l] = new RGAlphabet(lines[l][c], weight, maxUX, maxUY, styleSelected, option, strokeWeight, _r);
+      RGAs[l] = new RGAlphabet(lines[l][c], weight, maxUX, maxUY, styleSelected, option.style, strokeWeight, _r);
       _r.push();
       if (RGAmode.valign == "baseline") {
         posY += innerGap;
@@ -118,9 +113,6 @@ const composeRGA = (givenText, _r) => {
     }
   }
 }
-
-// RGAインスタンスを入れる配列を用意
-const RGAs = new Array();
 
 class RGAlphabet {
   constructor(_char, _u, _maxUX, _maxUY, _style, _option, _strokeWeight, _r) {

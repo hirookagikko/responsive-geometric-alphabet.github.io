@@ -66,7 +66,8 @@ function draw() {
   textMask2.copy(textMask1, 0, 0, width, height, 0, 0, width, height);
   textMask2.filter(INVERT);
 
-  composeRGA(givenText, textMask1);
+  composeRGA(givenText, 0, 0, {style: "outline"}, textMask1);
+  composeRGA(givenText, 0, 0, {style: "outline"}, textMask2);
 
   const maskedBG1 = pgMask(pg1, textMask1);
   image(maskedBG1, 0, 0);
