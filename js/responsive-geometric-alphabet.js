@@ -7,14 +7,16 @@ const RGAs = new Array();
 const RGAmode = {
   line: "line-per-word", // 改行モード
   valign: "baseline", // 行揃え
-  charHeight: "random" // 文字の高さ "random", "full"
+  charHeight: "random", // 文字の高さ "random", "full"
+  style: "rounded", // スタイル
+  option: "outlined"
 }
 
 // 文字を組む
-const composeRGA = (givenText, posX, posY, option, _r) => {
+const composeRGA = (givenText, posX, posY, style, option, _r) => {
   if (_r === undefined) {
   } else {
-    
+
   }
   // テキスト処理 行に分割して配列化
   let lines = [];
@@ -84,8 +86,8 @@ const composeRGA = (givenText, posX, posY, option, _r) => {
       // textMask1.rect(posX, posY, maxUX * weight, lineHeight - weight);
       // textMask1.line(posX - weight / 2, posY + innerGap, posX + maxUX * weight + weight / 2, posY + innerGap);
 
-      styleSelected = "rounded";
-      RGAs[l] = new RGAlphabet(lines[l][c], weight, maxUX, maxUY, styleSelected, option.style, strokeWeight, _r);
+      RGAs[l] = new RGAlphabet(lines[l][c], weight, maxUX, maxUY, RGAmode.style, RGAmode.option, strokeWeight, _r);
+      console.log(RGAs[l]);
       _r.push();
       if (RGAmode.valign == "baseline") {
         posY += innerGap;
@@ -121,7 +123,6 @@ class RGAlphabet {
     this.maxUX = _maxUX;
     this.maxUY = _maxUY;
     this.style = _style;
-    this.option = _option;
     this.strokeWeight = _strokeWeight * 2;
     this.r = _r;
     this.parts = [];
