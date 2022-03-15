@@ -13,11 +13,8 @@ const RGAmode = {
 }
 
 // 文字を組む
-const composeRGA = (givenText, posX, posY, style, option, _r) => {
-  if (_r === undefined) {
-  } else {
+const composeRGA = (givenText, posX, posY, RGAmode, _r) => {
 
-  }
   // テキスト処理 行に分割して配列化
   let lines = [];
   let lineCount = 0;
@@ -49,8 +46,6 @@ const composeRGA = (givenText, posX, posY, style, option, _r) => {
   }
   // 文字を並べる
   let weight, strokeWeight, maxUX, maxUY, offsetX, offsetY, innerGap;
-  let step;
-  let rand = random(1) > 0.5;
 
   // lは行数
   let lineLengths = [];
@@ -60,7 +55,6 @@ const composeRGA = (givenText, posX, posY, style, option, _r) => {
   let maxLength = lineLengths.reduce(function(a, b) {
     return Math.max(a, b);
   });
-  console.log(maxLength);
   weight = int(random(2, width / (maxLength + 1) / 6));
   const lineHeight = (height + weight) / lines.length;
 
@@ -79,31 +73,33 @@ const composeRGA = (givenText, posX, posY, style, option, _r) => {
       offsetY = weight * maxUY + weight;
       strokeWeight = weight / 2;
       innerGap = lineHeight - (weight * maxUY) - weight;
+      console.log("strokeWeight = " + strokeWeight);
 
-      // 確認用
-      // textMask1.noFill();
-      // textMask1.stroke(112);
-      // textMask1.rect(posX, posY, maxUX * weight, lineHeight - weight);
-      // textMask1.line(posX - weight / 2, posY + innerGap, posX + maxUX * weight + weight / 2, posY + innerGap);
-
-      RGAs[l] = new RGAlphabet(lines[l][c], weight, maxUX, maxUY, RGAmode.style, RGAmode.option, strokeWeight, _r);
-      console.log(RGAs[l]);
-      _r.push();
-      if (RGAmode.valign == "baseline") {
-        posY += innerGap;
+      if (!RGAs[l]) {
+        RGAs[l] = [];
       }
-      _r.translate(posX, posY);
-      RGAs[l].print();
-      _r.pop();
-      posX += offsetX;
-      if (RGAmode.valign == "baseline") {
-        posY -= innerGap;
-      }
+      RGAs[l][c] = new RGAlphabet(lines[l][c], weight, maxUX, maxUY, RGAmode, strokeWeight, _r);
 
-      if (RGAmode.line == "line-per-sentence") {
-        if (posX > width) {
-          posX = 0;
-          posY += lineHeight;
+      if (_r === undefined) {
+
+      } else {
+        _r.push();
+        if (RGAmode.valign == "baseline") {
+          posY += innerGap;
+        }
+        _r.translate(posX, posY);
+        RGAs[l].print();
+        _r.pop();
+        posX += offsetX;
+        if (RGAmode.valign == "baseline") {
+          posY -= innerGap;
+        }
+
+        if (RGAmode.line == "line-per-sentence") {
+          if (posX > width) {
+            posX = 0;
+            posY += lineHeight;
+          }
         }
       }
     }
@@ -115,6 +111,7 @@ const composeRGA = (givenText, posX, posY, style, option, _r) => {
     }
   }
 }
+console.log(RGAs);
 
 class RGAlphabet {
   constructor(_char, _u, _maxUX, _maxUY, _style, _option, _strokeWeight, _r) {
@@ -6384,13 +6381,25 @@ class RGAlphabet {
       let p = this.parts[i];
       switch(p.type) {
         case "rect":
-          this.r.rect(p.posX, p.posY, p.width, p.height);
+          if (this.r === undefined) {
+            rect(p.posX, p.posY, p.width, p.height);
+          } else {
+            this.r.rect(p.posX, p.posY, p.width, p.height);
+          }
           break;
         case "arc":
-          if (p.radiusY) {
-            this.r.arc(p.posX, p.posY, p.radius, p.radiusY, p.start, p.end);
+          if (this.r === undefined) {
+            if (p.radiusY) {
+              arc(p.posX, p.posY, p.radius, p.radiusY, p.start, p.end);
+            } else {
+              arc(p.posX, p.posY, p.radius, p.radius, p.start, p.end);
+            }
           } else {
-            this.r.arc(p.posX, p.posY, p.radius, p.radius, p.start, p.end);
+            if (p.radiusY) {
+              this.r.arc(p.posX, p.posY, p.radius, p.radiusY, p.start, p.end);
+            } else {
+              this.r.arc(p.posX, p.posY, p.radius, p.radius, p.start, p.end);
+            }
           }
           break;
         case "line":
@@ -6405,38 +6414,73 @@ class RGAlphabet {
     }
   }
   print() {
-    const r = this.r;
     this.generate();
-    if (this.style == "bitmap") {
-      if (this.option == "outline") {
-        r.stroke(0);
-        r.strokeWeight(this.strokeWeight);
-        r.fill(0);
-      } else {
-        r.noStroke();
-        r.fill(0);
-      }
-      this.draw();
-      if (this.option == "outline") {
-        r.noStroke();
-        r.fill(255);
+    if (this.r === undefined) {
+      if (this.style == "bitmap") {
+        if (this.option == "outline") {
+          stroke(0);
+          strokeWeight(this.strokeWeight);
+          fill(0);
+        } else {
+          noStroke();
+          fill(0);
+        }
         this.draw();
+        if (this.option == "outline") {
+          noStroke();
+          fill(255);
+          this.draw();
+        }
       }
-    }
 
-    if (this.style == "rounded") {
-      r.stroke(0);
-      r.noFill();
-      if (this.option == "outline") {
-        r.strokeWeight(this.u + this.strokeWeight);
-      } else {
-        r.strokeWeight(this.strokeWeight);
-      }
-      this.draw();
-      if (this.option == "outline") {
-        r.stroke(255);
-        r.strokeWeight(this.strokeWeight);
+      if (this.style == "rounded") {
+        stroke(0);
+        noFill();
+        if (this.option == "outline") {
+          strokeWeight(this.u + this.strokeWeight);
+        } else {
+          strokeWeight(this.strokeWeight);
+        }
         this.draw();
+        if (this.option == "outline") {
+          stroke(255);
+          strokeWeight(this.strokeWeight);
+          this.draw();
+        }
+      }
+    } else {
+      const r = this.r;
+      if (this.style == "bitmap") {
+        if (this.option == "outline") {
+          r.stroke(0);
+          r.strokeWeight(this.strokeWeight);
+          r.fill(0);
+        } else {
+          r.noStroke();
+          r.fill(0);
+        }
+        this.draw();
+        if (this.option == "outline") {
+          r.noStroke();
+          r.fill(255);
+          this.draw();
+        }
+      }
+
+      if (this.style == "rounded") {
+        r.stroke(0);
+        r.noFill();
+        if (this.option == "outline") {
+          r.strokeWeight(this.u + this.strokeWeight);
+        } else {
+          r.strokeWeight(this.strokeWeight);
+        }
+        this.draw();
+        if (this.option == "outline") {
+          r.stroke(255);
+          r.strokeWeight(this.strokeWeight);
+          this.draw();
+        }
       }
     }
   }
