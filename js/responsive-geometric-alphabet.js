@@ -73,12 +73,14 @@ const composeRGA = (givenText, posX, posY, RGAmode, _r) => {
       offsetY = weight * maxUY + weight;
       strokeWeight = weight / 2;
       innerGap = lineHeight - (weight * maxUY) - weight;
-      console.log("strokeWeight = " + strokeWeight);
 
       if (!RGAs[l]) {
         RGAs[l] = [];
       }
       RGAs[l][c] = new RGAlphabet(lines[l][c], weight, maxUX, maxUY, RGAmode, strokeWeight, _r);
+
+      // 文字を生成して格納
+      RGAs[l][c].generate();
 
       if (_r === undefined) {
 
@@ -88,7 +90,7 @@ const composeRGA = (givenText, posX, posY, RGAmode, _r) => {
           posY += innerGap;
         }
         _r.translate(posX, posY);
-        RGAs[l].print();
+        RGAs[l][c].print();
         _r.pop();
         posX += offsetX;
         if (RGAmode.valign == "baseline") {
@@ -114,14 +116,15 @@ const composeRGA = (givenText, posX, posY, RGAmode, _r) => {
 console.log(RGAs);
 
 class RGAlphabet {
-  constructor(_char, _u, _maxUX, _maxUY, _style, _option, _strokeWeight, _r) {
+  constructor(_char, _u, _maxUX, _maxUY, _mode, _strokeWeight, _r) {
     this.char = _char;
     this.u = _u;
     this.maxUX = _maxUX;
     this.maxUY = _maxUY;
-    this.style = _style;
+    this.style = _mode.style;
+    this.option = _mode.option;
     this.strokeWeight = _strokeWeight * 2;
-    this.r = _r;
+    if (_r) { this.r = _r };
     this.parts = [];
   }
   // 文字を生成して格納
@@ -6414,7 +6417,7 @@ class RGAlphabet {
     }
   }
   print() {
-    this.generate();
+    
     if (this.r === undefined) {
       if (this.style == "bitmap") {
         if (this.option == "outline") {
