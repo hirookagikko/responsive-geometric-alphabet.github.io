@@ -49,19 +49,19 @@ const composeRGA = (givenText, posX, posY, RGAmode, _r) => {
 
   // lは行数
   let lineLengths = [];
-  for (const n in lines) {
-    lineLengths.push(lines[n].length);
-  }
+  lines.forEach(function(line) {
+    lineLengths.push(lines.length);
+  });
   let maxLength = lineLengths.reduce(function(a, b) {
     return Math.max(a, b);
   });
   weight = int(random(2, width / (maxLength + 1) / 6));
   const lineHeight = (height + weight) / lines.length;
 
-  for (let l = 0;l < lines.length;l++) {
-    for (let c = 0;c < lines[l].length;c++) {
+  lines.forEach(function(line) {
+    for (let c = 0;c < line.length;c++) {
       if (RGAmode.line == "line-per-word") {
-        maxUX = (width - (weight * (lines[l].length - 1))) / lines[l].length / weight;
+        maxUX = (width - (weight * (line.length - 1))) / line.length / weight;
       }
       if (RGAmode.charHeight == "random") {
         maxUY = random(5, (lineHeight - weight) / weight);
@@ -74,13 +74,13 @@ const composeRGA = (givenText, posX, posY, RGAmode, _r) => {
       strokeWeight = weight / 2;
       innerGap = lineHeight - (weight * maxUY) - weight;
 
-      if (!RGAs[l]) {
-        RGAs[l] = [];
+      if (!RGAs[line]) {
+        RGAs[line] = [];
       }
-      RGAs[l][c] = new RGAlphabet(lines[l][c], weight, maxUX, maxUY, RGAmode, strokeWeight, _r);
+      RGAs[line][c] = new RGAlphabet(line[c], weight, maxUX, maxUY, RGAmode, strokeWeight, _r);
 
       // 文字を生成して格納
-      RGAs[l][c].generate();
+      RGAs[line][c].generate();
 
       if (_r === undefined) {
 
@@ -90,7 +90,7 @@ const composeRGA = (givenText, posX, posY, RGAmode, _r) => {
           posY += innerGap;
         }
         _r.translate(posX, posY);
-        RGAs[l][c].print();
+        RGAs[line][c].print();
         _r.pop();
         posX += offsetX;
         if (RGAmode.valign == "baseline") {
@@ -111,7 +111,7 @@ const composeRGA = (givenText, posX, posY, RGAmode, _r) => {
     } else {
       posX += offsetX / 2;
     }
-  }
+  });
 }
 console.log(RGAs);
 
@@ -6417,7 +6417,7 @@ class RGAlphabet {
     }
   }
   print() {
-    
+
     if (this.r === undefined) {
       if (this.style == "bitmap") {
         if (this.option == "outline") {
