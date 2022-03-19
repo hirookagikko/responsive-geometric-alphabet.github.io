@@ -9,12 +9,11 @@ const RGAmode = {
   valign: "baseline", // 行揃え
   charHeight: "random", // 文字の高さ "random", "full"
   style: "rounded", // スタイル
-  option: "outlined"
+  option: "outlined",
 }
 
 // 文字を組む
-const composeRGA = (givenText, posX, posY, RGAmode, _r) => {
-
+const composeRGA = (givenText, posX, posY, width, height, unit, strokeWeight, RGAmode, _r) => {
   // テキスト処理 行に分割して配列化
   let lines = [];
   let lineCount = 0;
@@ -45,7 +44,7 @@ const composeRGA = (givenText, posX, posY, RGAmode, _r) => {
     }
   }
   // 文字を並べる
-  let weight, strokeWeight, maxUX, maxUY, offsetX, offsetY, innerGap;
+  let maxUX, maxUY, offsetX, offsetY, innerGap;
 
   // lは行数
   let lineLengths = [];
@@ -55,29 +54,27 @@ const composeRGA = (givenText, posX, posY, RGAmode, _r) => {
   let maxLength = lineLengths.reduce(function(a, b) {
     return Math.max(a, b);
   });
-  weight = int(random(2, width / (maxLength + 1) / 6));
-  const lineHeight = (height + weight) / lines.length;
 
-  lines.forEach(function(line) {
-    for (let c = 0;c < line.length;c++) {
+  const lineHeight = (height + unit) / lines.length;
+
+  for(let line = 0;line < lines.length;line++) {
+
+    for (let c = 0;c < lines[line].length;c++) {
       if (RGAmode.line == "line-per-word") {
-        maxUX = (width - (weight * (line.length - 1))) / line.length / weight;
+        maxUX = (width - (unit * (lines[line].length - 1))) / lines[line].length / unit;
       }
       if (RGAmode.charHeight == "random") {
-        maxUY = random(5, (lineHeight - weight) / weight);
+        maxUY = random(5, (lineHeight - unit) / unit);
       } else {
-        maxUY = (lineHeight - weight) / weight;
+        maxUY = (lineHeight - unit) / unit;
       }
 
-      offsetX = weight * maxUX + weight;
-      offsetY = weight * maxUY + weight;
-      strokeWeight = weight / 2;
-      innerGap = lineHeight - (weight * maxUY) - weight;
-
-      if (!RGAs[line]) {
-        RGAs[line] = [];
-      }
-      RGAs[line][c] = new RGAlphabet(line[c], weight, maxUX, maxUY, RGAmode, strokeWeight, _r);
+      offsetX = unit * maxUX + unit;
+      offsetY = unit * maxUY + unit;
+      innerGap = lineHeight - (unit * maxUY) - unit;
+      console.log(`char: ${lines[line][c]}, unit: ${unit}, maxUX: ${maxUX}, maxUY: ${maxUY}, mode: ${RGAmode.line}, strokeWeight: ${strokeWeight}, r: ${_r}`);
+      RGAs.push([line]);
+      RGAs[line][c] = new RGAlphabet(lines[line][c], unit, maxUX, maxUY, RGAmode, strokeWeight, _r);
 
       // 文字を生成して格納
       RGAs[line][c].generate();
@@ -111,7 +108,7 @@ const composeRGA = (givenText, posX, posY, RGAmode, _r) => {
     } else {
       posX += offsetX / 2;
     }
-  });
+  };
 }
 console.log(RGAs);
 
@@ -124,7 +121,7 @@ class RGAlphabet {
     this.style = _mode.style;
     this.option = _mode.option;
     this.strokeWeight = _strokeWeight * 2;
-    if (_r) { this.r = _r };
+    if (_r) { this.r = _r } else {};
     this.parts = [];
   }
   // 文字を生成して格納
