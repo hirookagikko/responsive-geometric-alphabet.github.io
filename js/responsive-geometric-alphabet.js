@@ -46,17 +46,28 @@ const composeRGA = (givenText, posX, posY, width, height, unit, strokeWeight, RG
   // 文字を並べる
   let maxUX, maxUY, offsetX, offsetY, innerGap;
 
-  // lは行数
+  // 最大文字数の判定
   const lineLengths = lines.map(line => line.length);
   const maxLineLength = Math.max(...lineLengths);
+  console.log(`maxLineLength: ${maxLineLength}`); // 行の最大文字数はどこに活用？
   const lineHeight = (height + unit) / lines.length;
 
   for(let line = 0;line < lines.length;line++) {
-
     for (let c = 0;c < lines[line].length;c++) {
-      if (RGAmode.line == "line-per-word") {
-        maxUX = (width - (unit * (lines[line].length - 1))) / lines[line].length / unit;
+      switch(RGAmode.line) {
+        case "line-per-word":
+          maxUX = (width - (unit * (lines[line].length - 1))) / lines[line].length / unit;
+          break;
+        case "line-per-sentence":
+          // ここは別途考える必要がある。そもそもこのモード必要？
+          break;
+        case "inline":
+          // line-per-wordとinline（なりゆき流し込み）があればいい気がする。
+          break;
+        default:
+          break;
       }
+
       if (RGAmode.charHeight == "random") {
         maxUY = random(5, (lineHeight - unit) / unit);
       } else {
@@ -67,12 +78,13 @@ const composeRGA = (givenText, posX, posY, width, height, unit, strokeWeight, RG
       offsetY = unit * maxUY + unit;
       innerGap = lineHeight - (unit * maxUY) - unit;
       console.log(`char: ${lines[line][c]}, unit: ${unit}, maxUX: ${maxUX}, maxUY: ${maxUY}, mode: ${RGAmode.line}, strokeWeight: ${strokeWeight}, r: ${_r}`);
-      RGAs.push([line]);
+      if(!RGAs[line]) { RGAs.push([line]) };
       RGAs[line][c] = new RGAlphabet(lines[line][c], unit, maxUX, maxUY, RGAmode, strokeWeight, _r);
 
       // 文字を生成して格納
-      RGAs[line][c].generate();
+      RGAs[line][c].compose();
 
+      // _rがあるときはprint(),ないときはdraw()という分岐にするかな
       if (_r === undefined) {
 
       } else {
@@ -119,7 +131,7 @@ class RGAlphabet {
     this.parts = [];
   }
   // 文字を生成して格納
-  generate() {
+  compose() {
     const u = this.u;
     this.parts.length = 0;
     let offset = 0;
