@@ -47,14 +47,8 @@ const composeRGA = (givenText, posX, posY, width, height, unit, strokeWeight, RG
   let maxUX, maxUY, offsetX, offsetY, innerGap;
 
   // lは行数
-  let lineLengths = [];
-  lines.forEach(function(line) {
-    lineLengths.push(lines.length);
-  });
-  let maxLength = lineLengths.reduce(function(a, b) {
-    return Math.max(a, b);
-  });
-
+  const lineLengths = lines.map(line => line.length);
+  const maxLineLength = Math.max(...lineLengths);
   const lineHeight = (height + unit) / lines.length;
 
   for(let line = 0;line < lines.length;line++) {
