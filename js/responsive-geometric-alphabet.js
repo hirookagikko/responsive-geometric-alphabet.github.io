@@ -7,7 +7,7 @@ const RGAs = new Array();
 const RGAmode = {
   line: "line-per-word", // 改行モード
   valign: "baseline", // 行揃え
-  charHeight: "random", // 文字の高さ "random", "full"
+  charHeight: "full", // 文字の高さ "random", "full"
   style: "rounded", // スタイル
   option: "outlined",
 }
@@ -34,13 +34,8 @@ const composeRGA = (givenText, posX, posY, width, height, unit, strokeWeight, RG
           lineCount++;
         }
         break;
-      case("line-per-sentence"):
-        lines[lineCount] += givenText[char];
-        if (givenText[char].match(/[.,!?]/g)) {
-          lineCount++;
-        }
-        break;
       default:
+        // 成り行き流し込みの場合の処理を書く
         break;
     }
   }
@@ -50,8 +45,7 @@ const composeRGA = (givenText, posX, posY, width, height, unit, strokeWeight, RG
 
   // 最大文字数の判定
   const lineLengths = lines.map(line => line.length);
-  const maxLineLength = Math.max(...lineLengths);
-  console.log(`maxLineLength: ${maxLineLength}`); // 行の最大文字数はどこに活用？
+  const maxLineLength = Math.max(...lineLengths); // 行の最大文字数はどこに活用？
   const lineHeight = (height + unit) / lines.length;
 
   // 行ごとに配列化
@@ -62,27 +56,23 @@ const composeRGA = (givenText, posX, posY, width, height, unit, strokeWeight, RG
         case "line-per-word":
           maxUX = (width - (unit * (line.length - 1))) / line.length / unit;
           break;
-        case "line-per-sentence":
-          // ここは別途考える必要がある。そもそもこのモード必要？
-          break;
-        case "inline":
-          // line-per-wordとinline（なりゆき流し込み）があればいい気がする。
-          break;
         default:
+          // line-per-wordと成り行き流し込み（default）だけあればいい気がしてきた
           break;
       }
 
+      // 文字の高さモードがランダムの場合
       if (RGAmode.charHeight == "random") {
         maxUY = random(5, (lineHeight - unit) / unit);
       } else {
         maxUY = (lineHeight - unit) / unit;
       }
 
-      offsetX = unit * maxUX + unit;
-      offsetY = unit * maxUY + unit;
+      offsetX = unit * maxUX + unit; // 文字送り
+      offsetY = unit * maxUY + unit; // 行送り
       innerGap = lineHeight - (unit * maxUY) - unit;
       console.log(`char: ${line[c]}, unit: ${unit}, maxUX: ${maxUX}, maxUY: ${maxUY}, mode: ${RGAmode.line}, strokeWeight: ${strokeWeight}, r: ${_r}`);
-      RGAs[index][c] = new RGAlphabet(line[c], unit, maxUX, maxUY, RGAmode, strokeWeight, _r);
+      RGAs[index][c] = new RGAlphabet(line[c], unit, posX, posY, maxUX, maxUY, RGAmode, strokeWeight, _r);
 
       // 文字を生成して格納
       RGAs[index][c].compose();
@@ -102,13 +92,6 @@ const composeRGA = (givenText, posX, posY, width, height, unit, strokeWeight, RG
         if (RGAmode.valign == "baseline") {
           posY -= innerGap;
         }
-
-        if (RGAmode.line == "line-per-sentence") {
-          if (posX > width) {
-            posX = 0;
-            posY += lineHeight;
-          }
-        }
       }
     }
     if (RGAmode.line == "line-per-word") {
@@ -122,9 +105,11 @@ const composeRGA = (givenText, posX, posY, width, height, unit, strokeWeight, RG
 console.log(RGAs);
 
 class RGAlphabet {
-  constructor(_char, _u, _maxUX, _maxUY, _mode, _strokeWeight, _r) {
+  constructor(_char, _u, _posX, _posY, _maxUX, _maxUY, _mode, _strokeWeight, _r) {
     this.char = _char;
     this.u = _u;
+    this.posX = _posX;
+    this.posY = _posY;
     this.maxUX = _maxUX;
     this.maxUY = _maxUY;
     this.style = _mode.style;
