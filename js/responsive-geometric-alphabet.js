@@ -9,11 +9,15 @@ const RGAmode = {
   valign: "baseline", // 行揃え
   charHeight: "full", // 文字の高さ "random", "full"
   style: "rounded", // スタイル
-  option: "outlined",
+  option: "normal",
 }
 
 // 文字を組む
 const composeRGA = (givenText, posX, posY, width, height, unit, strokeWeight, RGAmode, _r) => {
+
+  // posX, posY初期値（起点）
+  const defPosX = posX;
+  const defPosY = posY;
 
   // テキスト処理 行に分割して配列化
   let lines = [];
@@ -72,27 +76,32 @@ const composeRGA = (givenText, posX, posY, width, height, unit, strokeWeight, RG
       offsetY = unit * maxUY + unit; // 行送り
       innerGap = lineHeight - (unit * maxUY) - unit;
       console.log(`char: ${line[c]}, unit: ${unit}, maxUX: ${maxUX}, maxUY: ${maxUY}, mode: ${RGAmode.line}, strokeWeight: ${strokeWeight}, r: ${_r}`);
-      RGAs[index][c] = new RGAlphabet(line[c], unit, posX, posY, maxUX, maxUY, RGAmode, strokeWeight, _r);
+      RGAs[index][c] = new RGAlphabet(line[c], unit, posX, posY, maxUX, maxUY, RGAmode, strokeWeight);
 
       // 文字を生成して格納
       RGAs[index][c].compose();
 
-      // _rがあるときはprint(),ないときはdraw()という分岐にするかな
+      // _rがあるときはprint(),ないときはdraw()
       if (_r === undefined) {
-
+        noFill();
+        stroke(0);
+        push();
+        translate(posX, posY);
+        RGAs[index][c].draw(posX, posY);
+        pop();
       } else {
         _r.push();
-        if (RGAmode.valign == "baseline") {
-          posY += innerGap;
-        }
         _r.translate(posX, posY);
         RGAs[index][c].print();
         _r.pop();
-        posX += offsetX;
         if (RGAmode.valign == "baseline") {
           posY -= innerGap;
         }
       }
+      if (RGAmode.valign === "baseline") {
+        posY += innerGap; // 行送り
+      }
+      posX += offsetX; // 字送り
     }
     if (RGAmode.line == "line-per-word") {
       posX = 0;
@@ -105,7 +114,7 @@ const composeRGA = (givenText, posX, posY, width, height, unit, strokeWeight, RG
 console.log(RGAs);
 
 class RGAlphabet {
-  constructor(_char, _u, _posX, _posY, _maxUX, _maxUY, _mode, _strokeWeight, _r) {
+  constructor(_char, _u, _posX, _posY, _maxUX, _maxUY, _mode, _strokeWeight) {
     this.char = _char;
     this.u = _u;
     this.posX = _posX;
@@ -115,7 +124,6 @@ class RGAlphabet {
     this.style = _mode.style;
     this.option = _mode.option;
     this.strokeWeight = _strokeWeight * 2;
-    if (_r) { this.r = _r } else {};
     this.parts = [];
   }
   // 文字を生成して格納
@@ -6373,34 +6381,23 @@ class RGAlphabet {
   draw() {
     for (const i in this.parts) {
       let p = this.parts[i];
+      strokeWeight(this.strokeWeight);
       switch(p.type) {
         case "rect":
-          if (this.r === undefined) {
-            rect(p.posX, p.posY, p.width, p.height);
-          } else {
-            this.r.rect(p.posX, p.posY, p.width, p.height);
-          }
+          rect(p.posX, p.posY, p.width, p.height);
           break;
         case "arc":
-          if (this.r === undefined) {
-            if (p.radiusY) {
-              arc(p.posX, p.posY, p.radius, p.radiusY, p.start, p.end);
-            } else {
-              arc(p.posX, p.posY, p.radius, p.radius, p.start, p.end);
-            }
+          if (p.radiusY) {
+            arc(p.posX, p.posY, p.radius, p.radiusY, p.start, p.end);
           } else {
-            if (p.radiusY) {
-              this.r.arc(p.posX, p.posY, p.radius, p.radiusY, p.start, p.end);
-            } else {
-              this.r.arc(p.posX, p.posY, p.radius, p.radius, p.start, p.end);
-            }
+            arc(p.posX, p.posY, p.radius, p.radius, p.start, p.end);
           }
           break;
         case "line":
-          this.r.line(p.startPosX, p.startPosY, p.endPosX, p.endPosY);
+          line(p.startPosX, p.startPosY, p.endPosX, p.endPosY);
           break;
         case "point":
-          this.r.point(p.posX, p.posY);
+          point(p.posX, p.posY);
           break;
         default:
           break;
@@ -6408,7 +6405,6 @@ class RGAlphabet {
     }
   }
   print() {
-
     if (this.r === undefined) {
       if (this.style == "bitmap") {
         if (this.option == "outline") {
