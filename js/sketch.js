@@ -66,6 +66,7 @@ function draw() {
   textMask2.copy(textMask1, 0, 0, width, height, 0, 0, width, height);
   textMask2.filter(INVERT);
   console.log(RGAmode);
+
   composeRGA(givenText, 0, 0, width, height, 20, 10, RGAmode);
 
   const maskedBG1 = pgMask(pg1, textMask1);
