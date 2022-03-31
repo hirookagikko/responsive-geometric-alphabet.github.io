@@ -40,14 +40,18 @@ const composeRGA = (RGAmode) => {
   let posY = RGAmode.posY;
   let width = RGAmode.width;
   let height = RGAmode.height;
+  let style = RGAmode.style;
+  let option = RGAmode.option;
   let strokeWeight = RGAmode.strokeWeight;
-  let maxUX, maxUY, offsetX, offsetY, innerGap;
+  let charUnitW, charUnitH, offsetX, offsetY;
+  let lineGap = RGAmode.thickness;
+  let letterSpacing = RGAmode.thickness;
 
   // 最大文字数の判定
   const unit = RGAmode.thickness;
   const lineLengths = lines.map(line => line.length);
   const maxLineLength = Math.max(...lineLengths); // 行の最大文字数はどこに活用？
-  const lineHeight = (height + unit) / lines.length;
+  const lineHeight = (height - lineGap * (lines.length - 1)) / lines.length;
 
   // 行ごとに配列化
   lines.forEach(function(line, index) {
@@ -55,7 +59,7 @@ const composeRGA = (RGAmode) => {
     for (let c = 0;c < line.length;c++) {
       switch(RGAmode.line) {
         case "line-per-word":
-          maxUX = (width - (unit * (line.length - 1))) / line.length / unit;
+          charUnitW = (width - (unit * (line.length - 1))) / line.length / unit;
           break;
         default:
           // line-per-wordと成り行き流し込み（default）だけあればいい気がしてきた
@@ -64,16 +68,15 @@ const composeRGA = (RGAmode) => {
 
       // 文字の高さモードがランダムの場合
       if (RGAmode.charHeight == "random") {
-        maxUY = random(5, (lineHeight - unit) / unit);
+        charUnitH = random(5, lineHeight / unit);
       } else {
-        maxUY = (lineHeight - unit) / unit;
+        charUnitH = lineHeight / unit;
       }
 
-      offsetX = unit * maxUX + unit; // 文字送り
-      offsetY = unit * maxUY + unit; // 行送り
-      innerGap = lineHeight - (unit * maxUY) - unit;
-      console.log(`char: ${line[c]}, unit: ${unit}, maxUX: ${maxUX}, maxUY: ${maxUY}, mode: ${RGAmode.line}, strokeWeight: ${RGAmode.strokeWeight}, r: ${RGAmode.target}`);
-      RGAs[index][c] = new RGAlphabet(line[c], unit, posX, posY, maxUX, maxUY, RGAmode, strokeWeight);
+      offsetX = unit * charUnitW + letterSpacing; // 文字送り
+      offsetY = lineHeight + lineGap; // 行送り
+      console.log(`char: ${line[c]}, unit: ${unit}, charUnitW: ${charUnitW}, charUnitH: ${charUnitH}, mode: ${RGAmode.line}, strokeWeight: ${RGAmode.strokeWeight}, r: ${RGAmode.target}`);
+      RGAs[index][c] = new RGAlphabet(line[c], unit, posX, posY, charUnitW, charUnitH, style, option, strokeWeight);
 
       // 文字を生成して格納
       RGAs[index][c].compose();
@@ -83,7 +86,11 @@ const composeRGA = (RGAmode) => {
         noFill();
         stroke(RGAmode.color);
         push();
-        translate(posX, posY);
+        if (RGAmode.charHeight === "random" && RGAmode.valign === "bottom") {
+          translate(posX, posY + (lineHeight - unit * charUnitH));
+        } else {
+          translate(posX, posY);
+        }
         RGAs[index][c].draw();
         pop();
       } else {
@@ -91,18 +98,12 @@ const composeRGA = (RGAmode) => {
         RGAmode.target.translate();
         RGAs[index][c].print();
         RGAmode.target.pop();
-        if (RGAmode.valign == "baseline") {
-          posY -= innerGap;
-        }
-      }
-      if (RGAmode.valign === "baseline") {
-        posY += innerGap; // 行送り
       }
       posX += offsetX; // 字送り
     }
     if (RGAmode.line == "line-per-word") {
       posX = RGAmode.posX;
-      posY += lineHeight;
+      posY += lineHeight + lineGap;
     } else {
       posX += offsetX / 2;
     }
@@ -111,15 +112,15 @@ const composeRGA = (RGAmode) => {
 console.log(RGAs);
 
 class RGAlphabet {
-  constructor(_char, _u, _posX, _posY, _maxUX, _maxUY, _mode, _strokeWeight) {
+  constructor(_char, _u, _posX, _posY, _charUnitW, _charUnitH, _style, _option, _strokeWeight) {
     this.char = _char;
     this.u = _u;
     this.posX = _posX;
     this.posY = _posY;
-    this.maxUX = _maxUX;
-    this.maxUY = _maxUY;
-    this.style = _mode.style;
-    this.option = _mode.option;
+    this.charUnitW = _charUnitW;
+    this.charUnitH = _charUnitH;
+    this.style = _style;
+    this.option = _option;
     this.strokeWeight = _strokeWeight * 2;
     this.parts = [];
   }
@@ -137,10 +138,10 @@ class RGAlphabet {
       case "rounded":
         let r, eX, eY; // radius, expandX, expandY
         if (this.char == "A") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
           } else {
-            r = u * this.maxUY - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH - this.strokeWeight / 2 - offset;
           }
           this.parts.push(
             {
@@ -153,21 +154,21 @@ class RGAlphabet {
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - offset,
               posY: r / 2 + offset,
               radius: r - this.strokeWeight,
               start: - 180 / 2,
               end: 0
             }
           );
-          if (this.maxUY < this.maxUX) {
+          if (this.charUnitH < this.charUnitW) {
             this.parts.push(
               {
                 type: "line",
                 startPosX: r / 2 + offset,
-                startPosY: u / 2 + offset,
-                endPosX: u * this.maxUX - r / 2 - offset,
-                endPosY: u / 2 + offset
+                startPosY: this.strokeWeight / 2 + offset,
+                endPosX: u * this.charUnitW - r / 2 - offset,
+                endPosY: this.strokeWeight / 2 + offset
               }
             );
           }
@@ -177,46 +178,46 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: r / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               startPosY: r / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - u * (this.maxUY / 4),
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - u * (this.maxUY / 4)
+              startPosY: u * this.charUnitH - u * (this.charUnitH / 4),
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - u * (this.charUnitH / 4)
             }
           );
         }
         if (this.char == "B") {
-          if (this.maxUY > this.maxUX * 2) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
-            eY = this.maxUY - this.maxUX;
+          if (this.charUnitH > this.charUnitW * 2) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
+            eY = this.charUnitH - this.charUnitW;
             this.parts.push(
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
                 startPosY: r / 2 + this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
                 endPosY: u * (eY / 2) + offset
               },
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                startPosY: u * this.maxUY - u * (eY / 2) - offset,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY - r / 2 - offset
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                startPosY: u * this.charUnitH - u * (eY / 2) - offset,
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH - r / 2 - offset
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
                 posY: u * (eY / 2) + offset,
                 radius: r,
                 start: 0,
@@ -224,20 +225,20 @@ class RGAlphabet {
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-                posY: u * this.maxUY - u * (eY / 2) - offset,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+                posY: u * this.charUnitH - u * (eY / 2) - offset,
                 radius: r,
                 start: - 180 / 2,
                 end: 0
               }
             );
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH / 2 - this.strokeWeight / 2 - offset;
             eY = 0;
             this.parts.push(
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
                 posY: r / 2 + this.strokeWeight / 2 + offset,
                 radius: r,
                 start: 0,
@@ -245,8 +246,8 @@ class RGAlphabet {
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-                posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+                posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
                 radius: r,
                 start: - 180 / 2,
                 end: 0
@@ -258,33 +259,33 @@ class RGAlphabet {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 2
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 2
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -292,8 +293,8 @@ class RGAlphabet {
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -301,47 +302,47 @@ class RGAlphabet {
           );
         }
         if (this.char == "C") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX - this.strokeWeight - offset;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW - this.strokeWeight - offset;
             this.parts.push(
               {
                 type: "line",
                 startPosX: this.strokeWeight / 2 + offset,
                 startPosY: r / 2 + this.strokeWeight / 2 + offset,
                 endPosX: this.strokeWeight / 2 + offset,
-                endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+                endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
               },
               {
                 type: "line",
                 startPosX: r / 2 + offset,
                 startPosY: this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - r / 2.75 - offset,
+                endPosX: u * this.charUnitW - r / 2.75 - offset,
                 endPosY: this.strokeWeight / 2 + offset
               },
               {
                 type: "line",
                 startPosX: r / 2 + offset,
-                startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-                endPosX: u * this.maxUX - r / 2.75 - offset,
-                endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+                startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - r / 2.75 - offset,
+                endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
               }
             );
           } else {
-            r = u * this.maxUY - this.strokeWeight - offset;
+            r = u * this.charUnitH - this.strokeWeight - offset;
             this.parts.push(
               {
                 type: "line",
                 startPosX: r / 2 + offset,
                 startPosY: this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - r / 2.75 - offset,
+                endPosX: u * this.charUnitW - r / 2.75 - offset,
                 endPosY: this.strokeWeight / 2 + offset
               },
               {
                 type: "line",
                 startPosX: r / 2 + offset,
-                startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-                endPosX: u * this.maxUX - r / 2.75 - offset,
-                endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+                startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - r / 2.75 - offset,
+                endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
               }
             );
           }
@@ -357,14 +358,14 @@ class RGAlphabet {
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: - 180
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2.75 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2.75 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -372,8 +373,8 @@ class RGAlphabet {
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2.75 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2.75 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 4,
               end: 180 / 2
@@ -387,64 +388,64 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
-          if (this.maxUY >= this.maxUX) {
-            r = u * this.maxUX - this.strokeWeight - offset;
+          if (this.charUnitH >= this.charUnitW) {
+            r = u * this.charUnitW - this.strokeWeight - offset;
             this.parts.push(
               {
                 type: "line",
                 startPosX: this.strokeWeight / 2 + offset,
                 startPosY: r / 2 + this.strokeWeight / 2 + offset,
                 endPosX: this.strokeWeight / 2 + offset,
-                endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+                endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
               },
               {
                 type: "line",
                 startPosX: this.strokeWeight / 2 + offset,
                 startPosY: this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - r / 2 - offset,
+                endPosX: u * this.charUnitW - r / 2 - offset,
                 endPosY: this.strokeWeight / 2 + offset
               },
               {
                 type: "line",
                 startPosX: this.strokeWeight / 2 + offset,
-                startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-                endPosX: u * this.maxUX - r / 2 - offset,
-                endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+                startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - r / 2 - offset,
+                endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
               },
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
                 startPosY: r / 2 + this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
               }
             );
           } else {
-            r = u * this.maxUY - this.strokeWeight - offset;
+            r = u * this.charUnitH - this.strokeWeight - offset;
             this.parts.push(
               {
                 type: "line",
                 startPosX: this.strokeWeight / 2 + offset,
                 startPosY: this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - r / 2 - offset,
+                endPosX: u * this.charUnitW - r / 2 - offset,
                 endPosY: this.strokeWeight / 2 + offset
               },
               {
                 type: "line",
                 startPosX: this.strokeWeight / 2 + offset,
-                startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-                endPosX: u * this.maxUX - r / 2 - offset,
-                endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+                startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - r / 2 - offset,
+                endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
               }
             );
           }
           this.parts.push(
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -452,8 +453,8 @@ class RGAlphabet {
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -461,10 +462,10 @@ class RGAlphabet {
           );
         }
         if (this.char == "E") {
-          if (this.maxUY > this.maxUX * 2) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
+          if (this.charUnitH > this.charUnitW * 2) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH / 2 - this.strokeWeight / 2 - offset;
           }
           this.parts.push(
             {
@@ -472,28 +473,28 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - r / 2
+              endPosY: u * this.charUnitH - r / 2
             },
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * (this.maxUX - 1.5) - offset,
-              endPosY: u * this.maxUY / 2
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * (this.charUnitW - 1.5) - offset,
+              endPosY: u * this.charUnitH / 2
             },
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - this.strokeWeight  / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - this.strokeWeight  / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
@@ -506,7 +507,7 @@ class RGAlphabet {
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: - 180 * 1.5,
               end: - 180
@@ -514,11 +515,11 @@ class RGAlphabet {
           );
         }
         if (this.char == "F") {
-          if (this.maxUY > this.maxUX * 2) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
-            eY = this.maxUY - this.maxUX;
+          if (this.charUnitH > this.charUnitW * 2) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
+            eY = this.charUnitH - this.charUnitW;
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH / 2 - this.strokeWeight / 2 - offset;
             eY = 0;
           }
           this.parts.push(
@@ -526,22 +527,22 @@ class RGAlphabet {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * (this.maxUX - 1.5) - offset,
-              endPosY: u * this.maxUY / 2
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * (this.charUnitW - 1.5) - offset,
+              endPosY: u * this.charUnitH / 2
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
@@ -554,47 +555,47 @@ class RGAlphabet {
           );
         }
         if (this.char == "G") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX - this.strokeWeight - offset;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW - this.strokeWeight - offset;
             this.parts.push(
               {
                 type: "line",
                 startPosX: this.strokeWeight / 2 + offset,
                 startPosY: r / 2 + this.strokeWeight / 2 + offset,
                 endPosX: this.strokeWeight / 2 + offset,
-                endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+                endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
               },
               {
                 type: "line",
                 startPosX: r / 2 + offset,
                 startPosY: this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - r / 2.75 - offset,
+                endPosX: u * this.charUnitW - r / 2.75 - offset,
                 endPosY: this.strokeWeight / 2 + offset
               },
               {
                 type: "line",
                 startPosX: r / 2 + offset,
-                startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-                endPosX: u * this.maxUX - r / 2.75 - offset,
-                endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+                startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - r / 2.75 - offset,
+                endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
               }
             );
           } else {
-            r = u * this.maxUY - this.strokeWeight - offset;
+            r = u * this.charUnitH - this.strokeWeight - offset;
             this.parts.push(
               {
                 type: "line",
                 startPosX: r / 2 + offset,
                 startPosY: this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - r / 2.75 - offset,
+                endPosX: u * this.charUnitW - r / 2.75 - offset,
                 endPosY: this.strokeWeight / 2 + offset
               },
               {
                 type: "line",
                 startPosX: r / 2 + offset,
-                startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-                endPosX: u * this.maxUX - r / 2.75 - offset,
-                endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+                startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - r / 2.75 - offset,
+                endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
               }
             );
           }
@@ -610,14 +611,14 @@ class RGAlphabet {
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: - 180
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2.75 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2.75 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -625,25 +626,25 @@ class RGAlphabet {
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 3 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 3 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 3 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 3 - this.strokeWeight / 2 - offset,
               radius: r / 1.5,
               start: 0,
               end: 180 / 2
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              startPosY: u * this.maxUY - u * this.maxUY / 2.5,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              startPosY: u * this.charUnitH - u * this.charUnitH / 2.5,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - u * this.maxUX / 2.5,
-              startPosY: u * this.maxUY - u * this.maxUY / 2.5,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - u * this.maxUY / 2.5
+              startPosX: u * this.charUnitW - u * this.charUnitW / 2.5,
+              startPosY: u * this.charUnitH - u * this.charUnitH / 2.5,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - u * this.charUnitH / 2.5
             }
           );
         }
@@ -654,21 +655,21 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 2
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 2
             }
           );
         }
@@ -676,111 +677,111 @@ class RGAlphabet {
           this.parts.push(
             {
               type: "line",
-              startPosX: u * this.maxUX / 2,
+              startPosX: u * this.charUnitW / 2,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 2,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW / 2,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2 - u * this.maxUX / 4,
+              startPosX: u * this.charUnitW / 2 - u * this.charUnitW / 4,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 2 + u * this.maxUX / 4,
+              endPosX: u * this.charUnitW / 2 + u * this.charUnitW / 4,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2 - u * this.maxUX / 4,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX / 2 + u * this.maxUX / 4,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW / 2 - u * this.charUnitW / 4,
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW / 2 + u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
         if (this.char == "J") {
-          r = u * (this.maxUY / 5 * 3);
+          r = u * (this.charUnitH / 5 * 3);
           this.parts.push(
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - u * (this.maxUX / 4) - r / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - u * (this.charUnitW / 4) - r / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - u * (this.maxUX / 4) - offset,
+              startPosX: u * this.charUnitW - u * (this.charUnitW / 4) - offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - u * (this.maxUX / 4) - offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - u * (this.charUnitW / 4) - offset,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - u * (this.maxUX / 4) - r / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - u * (this.charUnitW / 4) - r / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
         if (this.char == "K") {
-          if (this.maxUY > this.maxUX * 2) {
-            r = u * this.maxUX - this.strokeWeight - offset * 2;
+          if (this.charUnitH > this.charUnitW * 2) {
+            r = u * this.charUnitW - this.strokeWeight - offset * 2;
             this.parts.push(
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
                 startPosY: this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                endPosY: u * (this.maxUY / 2) - r
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                endPosY: u * (this.charUnitH / 2) - r
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - r - this.strokeWeight / 2 - offset,
-                posY: u * (this.maxUY / 2) - r,
+                posX: u * this.charUnitW - r - this.strokeWeight / 2 - offset,
+                posY: u * (this.charUnitH / 2) - r,
                 radius: r * 2,
                 start: 0,
                 end: 180 / 2
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - r - this.strokeWeight / 2 - offset,
-                posY: u * (this.maxUY / 2) + r,
+                posX: u * this.charUnitW - r - this.strokeWeight / 2 - offset,
+                posY: u * (this.charUnitH / 2) + r,
                 radius: r * 2,
                 start: - 180 / 2,
                 end: 0
               },
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                startPosY: u * (this.maxUY / 2) + r,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                startPosY: u * (this.charUnitH / 2) + r,
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
               }
             );
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH / 2 - this.strokeWeight / 2 - offset;
             this.parts.push(
               {
                 type: "arc",
-                posX: u * this.maxUX - r - this.strokeWeight / 2 - offset,
-                posY: u * (this.maxUY / 2) - r,
+                posX: u * this.charUnitW - r - this.strokeWeight / 2 - offset,
+                posY: u * (this.charUnitH / 2) - r,
                 radius: r * 2,
                 start: 0,
                 end: 180 / 2
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - r - this.strokeWeight / 2 - offset,
-                posY: u * (this.maxUY / 2) + r,
+                posX: u * this.charUnitW - r - this.strokeWeight / 2 - offset,
+                posY: u * (this.charUnitH / 2) + r,
                 radius: r * 2,
                 start: - 180 / 2,
                 end: 0
@@ -788,9 +789,9 @@ class RGAlphabet {
               {
                 type: "line",
                 startPosX: this.strokeWeight / 2 + offset,
-                startPosY: u * (this.maxUY / 2),
-                endPosX: u * this.maxUX - r,
-                endPosY: u * (this.maxUY / 2)
+                startPosY: u * (this.charUnitH / 2),
+                endPosX: u * this.charUnitW - r,
+                endPosY: u * (this.charUnitH / 2)
               }
             );
           }
@@ -800,15 +801,15 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
         if (this.char == "L") {
-          if (this.maxUY > this.maxUX) {
-            r = u * (this.maxUX / 2) - this.strokeWeight - offset * 2;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * (this.charUnitW / 2) - this.strokeWeight - offset * 2;
           } else {
-            r = u * (this.maxUY / 2) - this.strokeWeight - offset * 2;
+            r = u * (this.charUnitH / 2) - this.strokeWeight - offset * 2;
           }
           this.parts.push(
             {
@@ -816,12 +817,12 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: - 180 * 1.5,
               end: - 180
@@ -829,16 +830,16 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
         if (this.char == "M") {
-          if (this.maxUX > this.maxUY * 2) {
-            r = u * this.maxUY - this.strokeWeight / 2 - offset;
-            eX = this.maxUX - this.maxUY;
+          if (this.charUnitW > this.charUnitH * 2) {
+            r = u * this.charUnitH - this.strokeWeight / 2 - offset;
+            eX = this.charUnitW - this.charUnitH;
             this.parts.push(
               {
                 type: "line",
@@ -849,9 +850,9 @@ class RGAlphabet {
               },
               {
                 type: "line",
-                startPosX: u * this.maxUX - u * (eX / 2) - offset,
+                startPosX: u * this.charUnitW - u * (eX / 2) - offset,
                 startPosY: this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - r / 2 - offset,
+                endPosX: u * this.charUnitW - r / 2 - offset,
                 endPosY: this.strokeWeight / 2 + offset
               },
               {
@@ -864,7 +865,7 @@ class RGAlphabet {
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - u * (eX / 2) - offset,
+                posX: u * this.charUnitW - u * (eX / 2) - offset,
                 posY: r / 2 + this.strokeWeight / 2 + offset,
                 radius: r,
                 start: - 180,
@@ -872,7 +873,7 @@ class RGAlphabet {
               }
             );
           } else {
-            r = u * this.maxUX / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitW / 2 - this.strokeWeight / 2 - offset;
             eX = 0;
             this.parts.push(
               {
@@ -885,7 +886,7 @@ class RGAlphabet {
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
                 posY: r / 2 + this.strokeWeight / 2 + offset,
                 radius: r,
                 start: - 180,
@@ -899,21 +900,21 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2,
+              startPosX: u * this.charUnitW / 2,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 2,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW / 2,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight  / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - this.strokeWeight  / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
@@ -925,7 +926,7 @@ class RGAlphabet {
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -934,9 +935,9 @@ class RGAlphabet {
           );
         }
         if (this.char == "N") {
-          if (this.maxUX > this.maxUY * 2) {
-            r = u * this.maxUY - this.strokeWeight / 2 - offset;
-            eX = this.maxUX - this.maxUY;
+          if (this.charUnitW > this.charUnitH * 2) {
+            r = u * this.charUnitH - this.strokeWeight / 2 - offset;
+            eX = this.charUnitW - this.charUnitH;
             this.parts.push(
               {
                 type: "line",
@@ -947,10 +948,10 @@ class RGAlphabet {
               },
               {
                 type: "line",
-                startPosX: u * this.maxUX - u * (eX / 2) - offset,
-                startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-                endPosX: u * this.maxUX - r / 2 - offset,
-                endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+                startPosX: u * this.charUnitW - u * (eX / 2) - offset,
+                startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - r / 2 - offset,
+                endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
               },
               {
                 type: "arc",
@@ -962,15 +963,15 @@ class RGAlphabet {
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - u * (eX / 2) - offset,
-                posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+                posX: u * this.charUnitW - u * (eX / 2) - offset,
+                posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
                 radius: r,
                 start: 180 / 2,
                 end: - 180
               }
             );
           } else {
-            r = u * this.maxUX / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitW / 2 - this.strokeWeight / 2 - offset;
             eX = 0;
             this.parts.push(
               {
@@ -983,8 +984,8 @@ class RGAlphabet {
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-                posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+                posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
                 radius: r,
                 start: 180 / 2,
                 end: - 180
@@ -997,21 +998,21 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2,
+              startPosX: u * this.charUnitW / 2,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 2,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW / 2,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight  / 2 - offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - this.strokeWeight  / 2 - offset,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
@@ -1023,8 +1024,8 @@ class RGAlphabet {
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -1032,10 +1033,10 @@ class RGAlphabet {
           );
         }
         if (this.char == "O") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
           } else {
-            r = u * this.maxUY - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH - this.strokeWeight / 2 - offset;
           }
           this.parts.push(
             {
@@ -1050,12 +1051,12 @@ class RGAlphabet {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -1066,19 +1067,19 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight  / 2 - offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - this.strokeWeight  / 2 - offset,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: 180
@@ -1086,14 +1087,14 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -1101,20 +1102,20 @@ class RGAlphabet {
           );
         }
         if (this.char == "P") {
-          if (this.maxUY > this.maxUX * 2) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
-            eY = this.maxUY - this.maxUX;
+          if (this.charUnitH > this.charUnitW * 2) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
+            eY = this.charUnitH - this.charUnitW;
             this.parts.push(
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
                 startPosY: r / 2 + this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
                 endPosY: u * (eY / 2) + offset
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
                 posY: u * (eY / 2) + offset,
                 radius: r,
                 start: 0,
@@ -1122,12 +1123,12 @@ class RGAlphabet {
               }
             );
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH / 2 - this.strokeWeight / 2 - offset;
             eY = 0;
             this.parts.push(
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
                 posY: r / 2 + this.strokeWeight / 2 + offset,
                 radius: r,
                 start: 0,
@@ -1140,26 +1141,26 @@ class RGAlphabet {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 2
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 2
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -1168,10 +1169,10 @@ class RGAlphabet {
           );
         }
         if (this.char == "Q") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
           } else {
-            r = u * this.maxUY - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH - this.strokeWeight / 2 - offset;
           }
           this.parts.push(
             {
@@ -1186,12 +1187,12 @@ class RGAlphabet {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -1202,19 +1203,19 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight  / 2 - offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - this.strokeWeight  / 2 - offset,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: 180
@@ -1222,49 +1223,49 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 1.5,
-              startPosY: u * this.maxUY / 1.5,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW / 1.5,
+              startPosY: u * this.charUnitH / 1.5,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
         if (this.char == "R") {
-          if (this.maxUY > this.maxUX * 2) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
-            eY = this.maxUY - this.maxUX;
+          if (this.charUnitH > this.charUnitW * 2) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
+            eY = this.charUnitH - this.charUnitW;
             this.parts.push(
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
                 startPosY: r / 2 + this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
                 endPosY: u * (eY / 2) + offset
               },
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                startPosY: u * this.maxUY - u * (eY / 2) - offset,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY - r / 2 - offset
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                startPosY: u * this.charUnitH - u * (eY / 2) - offset,
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH - r / 2 - offset
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
                 posY: u * (eY / 2) + offset,
                 radius: r,
                 start: 0,
@@ -1272,20 +1273,20 @@ class RGAlphabet {
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-                posY: u * this.maxUY - u * (eY / 2) - offset,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+                posY: u * this.charUnitH - u * (eY / 2) - offset,
                 radius: r,
                 start: - 90,
                 end: 0
               }
             );
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH / 2 - this.strokeWeight / 2 - offset;
             eY = 0;
             this.parts.push(
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
                 posY: r / 2 + this.strokeWeight / 2 + offset,
                 radius: r,
                 start: 0,
@@ -1293,8 +1294,8 @@ class RGAlphabet {
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-                posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+                posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
                 radius: r,
                 start: - 90,
                 end: 0
@@ -1306,26 +1307,26 @@ class RGAlphabet {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 2
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 2
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 90,
@@ -1333,41 +1334,41 @@ class RGAlphabet {
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              startPosY: u * (this.maxUY / 2) + r / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              startPosY: u * (this.charUnitH / 2) + r / 2 + offset,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
         if (this.char == "S") {
-          if (this.maxUY > this.maxUX * 2) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
+          if (this.charUnitH > this.charUnitW * 2) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
             this.parts.push(
               {
                 type: "line",
                 startPosX: this.strokeWeight / 2 + offset,
                 startPosY: r / 2 + this.strokeWeight / 2 + offset,
                 endPosX: this.strokeWeight / 2 + offset,
-                endPosY: u * this.maxUY / 2 - r / 2
+                endPosY: u * this.charUnitH / 2 - r / 2
               },
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                startPosY: u * this.maxUY / 2 + r / 2,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY - r / 2
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                startPosY: u * this.charUnitH / 2 + r / 2,
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH - r / 2
               }
             );
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH / 2 - this.strokeWeight / 2 - offset;
             this.parts.push(
               {
                 type: "line",
                 startPosX: r / 2 + this.strokeWeight / 2 + offset,
-                startPosY: u * this.maxUY / 2,
-                endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY / 2
+                startPosY: u * this.charUnitH / 2,
+                endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH / 2
               }
             );
           }
@@ -1376,15 +1377,15 @@ class RGAlphabet {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
@@ -1397,23 +1398,23 @@ class RGAlphabet {
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY / 2 - r / 2,
+              posY: u * this.charUnitH / 2 - r / 2,
               radius: r,
               start: 180 / 2,
               end: 180
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY / 2 + r / 2,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH / 2 + r / 2,
               radius: r,
               start: - 180 / 2,
               end: 0
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -1424,39 +1425,39 @@ class RGAlphabet {
           this.parts.push(
             {
               type: "line",
-              startPosX: u * this.maxUX / 2,
+              startPosX: u * this.charUnitW / 2,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 2,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW / 2,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             }
           );
         }
         if (this.char == "U") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX - this.strokeWeight - offset * 2;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW - this.strokeWeight - offset * 2;
           } else {
-            r = u * this.maxUY - this.strokeWeight - offset * 2;
+            r = u * this.charUnitH - this.strokeWeight - offset * 2;
           }
           this.parts.push(
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: 180
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -1464,9 +1465,9 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
 
@@ -1476,46 +1477,46 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             }
           );
         }
         if (this.char == "V") {
-          if (this.maxUY >= this.maxUX) {
-            r = u * this.maxUX * 2 - this.strokeWeight * 2 - offset * 4;
+          if (this.charUnitH >= this.charUnitW) {
+            r = u * this.charUnitW * 2 - this.strokeWeight * 2 - offset * 4;
             this.parts.push(
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
                 startPosY: this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
               }
             );
           } else {
-            r = u * this.maxUY * 2 - this.strokeWeight * 2 - offset * 4;
+            r = u * this.charUnitH * 2 - this.strokeWeight * 2 - offset * 4;
             this.parts.push(
               {
                 type: "line",
                 startPosX: this.strokeWeight / 2 + offset,
-                startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-                endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+                startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
               }
             );
           }
           this.parts.push(
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -1525,62 +1526,62 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
         if (this.char == "W") {
-          if (this.maxUX > this.maxUY * 2) {
-            r = u * this.maxUY - this.strokeWeight / 2 - offset;
-            eX = this.maxUX - this.maxUY;
+          if (this.charUnitW > this.charUnitH * 2) {
+            r = u * this.charUnitH - this.strokeWeight / 2 - offset;
+            eX = this.charUnitW - this.charUnitH;
             this.parts.push(
               {
                 type: "line",
                 startPosX: r / 2 + this.strokeWeight / 2 + offset,
-                startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
+                startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
                 endPosX: u * (eX / 2) + offset,
-                endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+                endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
               },
               {
                 type: "line",
-                startPosX: u * this.maxUX - u * (eX / 2) - offset,
-                startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-                endPosX: u * this.maxUX - r / 2 - offset,
-                endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+                startPosX: u * this.charUnitW - u * (eX / 2) - offset,
+                startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - r / 2 - offset,
+                endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
               },
               {
                 type: "arc",
                 posX: u * (eX / 2) + offset,
-                posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+                posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
                 radius: r,
                 start: 0,
                 end: 180 / 2
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - u * (eX / 2) - offset,
-                posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+                posX: u * this.charUnitW - u * (eX / 2) - offset,
+                posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
                 radius: r,
                 start: 180 / 2,
                 end: 180
               }
             );
           } else {
-            r = u * this.maxUX / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitW / 2 - this.strokeWeight / 2 - offset;
             eX = 0;
             this.parts.push(
               {
                 type: "arc",
                 posX: r / 2 + this.strokeWeight / 2 + offset,
-                posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+                posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
                 radius: r,
                 start: 0,
                 end: 180 / 2
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-                posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+                posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
                 radius: r,
                 start: 180 / 2,
                 end: 180
@@ -1593,34 +1594,34 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * this.maxUX / 2,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW / 2,
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * this.charUnitW / 2,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight  / 2 - offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - this.strokeWeight  / 2 - offset,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: 180
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -1628,15 +1629,15 @@ class RGAlphabet {
           );
         }
         if (this.char == "X") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
           } else {
-            r = u * this.maxUY - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH - this.strokeWeight / 2 - offset;
           }
           this.parts.push(
             {
               type: "arc",
-              posX: u * this.maxUX / 2 + r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW / 2 + r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: 180,
@@ -1644,37 +1645,37 @@ class RGAlphabet {
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2 + r / 2 - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW / 2 + r / 2 - this.strokeWeight / 2 - offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2 + r / 2 - this.strokeWeight / 2 - offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW / 2 + r / 2 - this.strokeWeight / 2 - offset,
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX / 2 + r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW / 2 + r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: 180
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2 - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW / 2 - this.strokeWeight / 2 - offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX / 2 - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW / 2 - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -1683,19 +1684,19 @@ class RGAlphabet {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 2 - r / 2,
+              endPosX: u * this.charUnitW / 2 - r / 2,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX / 2 - r / 2,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW / 2 - r / 2,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX / 2 - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW / 2 - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -1704,32 +1705,32 @@ class RGAlphabet {
           );
         }
         if (this.char == "Y") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX - this.strokeWeight - offset * 2;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW - this.strokeWeight - offset * 2;
           } else {
-            r = u * this.maxUY - this.strokeWeight - offset * 2;
+            r = u * this.charUnitH - this.strokeWeight - offset * 2;
           }
           this.parts.push(
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY / 1.5 - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH / 1.5 - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: 180
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY / 1.5 - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH / 1.5 - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -1739,67 +1740,67 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY / 1.5 - r / 2 - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH / 1.5 - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY / 1.5 - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 1.5 - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH / 1.5 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 1.5 - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 4,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW / 4,
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
         if (this.char == "Z") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX - this.strokeWeight - offset * 2;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW - this.strokeWeight - offset * 2;
             this.parts.push(
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
                 startPosY: this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY / 2 - r / 2
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH / 2 - r / 2
               },
               {
                 type: "line",
                 startPosX: this.strokeWeight / 2 + offset,
-                startPosY: u * this.maxUY / 2 + r / 2,
+                startPosY: u * this.charUnitH / 2 + r / 2,
                 endPosX: this.strokeWeight / 2 + offset,
-                endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+                endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
               }
             );
           } else {
-            r = u * this.maxUY - this.strokeWeight - offset * 2;
+            r = u * this.charUnitH - this.strokeWeight - offset * 2;
             this.parts.push(
               {
                 type: "line",
                 startPosX: r / 2 + this.strokeWeight / 2 + offset,
-                startPosY: u * this.maxUY / 2,
-                endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY / 2
+                startPosY: u * this.charUnitH / 2,
+                endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH / 2
               }
             );
           }
           this.parts.push(
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY / 2 - r / 2,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH / 2 - r / 2,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -1807,7 +1808,7 @@ class RGAlphabet {
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY / 2 + r / 2,
+              posY: u * this.charUnitH / 2 + r / 2,
               radius: r,
               start: 180,
               end: 180 * 1.5
@@ -1816,36 +1817,36 @@ class RGAlphabet {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 4,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW / 4,
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
         if (this.char == "1") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX - this.strokeWeight - offset;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW - this.strokeWeight - offset;
           } else {
-            r = u * this.maxUY - this.strokeWeight - offset;
+            r = u * this.charUnitH - this.strokeWeight - offset;
             this.parts.push(
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 2 - r / 2,
+              endPosX: u * this.charUnitW / 2 - r / 2,
               endPosY: r / 2 + this.strokeWeight / 2 + offset
             }
           );
@@ -1853,21 +1854,21 @@ class RGAlphabet {
           this.parts.push(
             {
               type: "line",
-              startPosX: u * this.maxUX / 2,
+              startPosX: u * this.charUnitW / 2,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 2,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW / 2,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX / 2 - r / 2,
+              posX: u * this.charUnitW / 2 - r / 2,
               posY: this.strokeWeight / 2 + offset,
               radius: r,
               start: 0,
@@ -1876,27 +1877,27 @@ class RGAlphabet {
           );
         }
         if (this.char == "2") {
-          if (this.maxUY > this.maxUX * 1.5) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
-            eY = this.maxUY - this.maxUX;
+          if (this.charUnitH > this.charUnitW * 1.5) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
+            eY = this.charUnitH - this.charUnitW;
             this.parts.push(
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
                 startPosY: r / 2 + this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
                 endPosY: u * (eY / 2) + offset
               },
               {
                 type: "line",
                 startPosX: this.strokeWeight / 2 + offset,
-                startPosY: u * this.maxUY - u * (eY / 2) - offset,
+                startPosY: u * this.charUnitH - u * (eY / 2) - offset,
                 endPosX: this.strokeWeight / 2 + offset,
-                endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+                endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
                 posY: u * (eY / 2) + offset,
                 radius: r,
                 start: 0,
@@ -1905,19 +1906,19 @@ class RGAlphabet {
               {
                 type: "arc",
                 posX: r / 2 + this.strokeWeight / 2 + offset,
-                posY: u * this.maxUY / 2 + r / 2,
+                posY: u * this.charUnitH / 2 + r / 2,
                 radius: r,
                 start: - 180,
                 end: - 180 / 2
               }
             );
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH / 2 - this.strokeWeight / 2 - offset;
             eY = 0;
             this.parts.push(
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
                 posY: r / 2 + this.strokeWeight / 2 + offset,
                 radius: r,
                 start: 0,
@@ -1926,7 +1927,7 @@ class RGAlphabet {
               {
                 type: "arc",
                 posX: r * 1.5 / 2 + this.strokeWeight / 2 + offset,
-                posY: u * this.maxUY / 2 + r * 1.5 / 2,
+                posY: u * this.charUnitH / 2 + r * 1.5 / 2,
                 radius: r * 1.5,
                 start: - 180,
                 end: - 180 / 2
@@ -1934,16 +1935,16 @@ class RGAlphabet {
               {
                 type: "line",
                 startPosX: r * 1.5 / 2 + this.strokeWeight / 2 + offset,
-                startPosY: u * this.maxUY / 2,
-                endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY / 2
+                startPosY: u * this.charUnitH / 2,
+                endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH / 2
               },
               {
                 type: "line",
                 startPosX: this.strokeWeight / 2 + offset,
-                startPosY: u * this.maxUY / 2 + r * 1.5 / 2,
+                startPosY: u * this.charUnitH / 2 + r * 1.5 / 2,
                 endPosX: this.strokeWeight / 2 + offset,
-                endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+                endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
               }
             )
           }
@@ -1960,12 +1961,12 @@ class RGAlphabet {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -1974,27 +1975,27 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
         if (this.char == "3") {
-          if (this.maxUY > this.maxUX * 2) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
-            eY = this.maxUY - this.maxUX;
+          if (this.charUnitH > this.charUnitW * 2) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
+            eY = this.charUnitH - this.charUnitW;
             this.parts.push(
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
                 startPosY: r / 2 + this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
                 endPosY: u * (eY / 2) + offset
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
                 posY: u * (eY / 2) + offset,
                 radius: r,
                 start: 0,
@@ -2002,27 +2003,27 @@ class RGAlphabet {
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-                posY: u * this.maxUY / 2 + r / 2,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+                posY: u * this.charUnitH / 2 + r / 2,
                 radius: r,
                 start: - 180 / 2,
                 end: 0
               },
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                startPosY: u * this.maxUY / 2 + r / 2,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY - r / 2
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                startPosY: u * this.charUnitH / 2 + r / 2,
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH - r / 2
               }
             );
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH / 2 - this.strokeWeight / 2 - offset;
             eY = 0;
             this.parts.push(
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
                 posY: r / 2 + this.strokeWeight / 2 + offset,
                 radius: r,
                 start: 0,
@@ -2030,15 +2031,15 @@ class RGAlphabet {
               },
               {
                 type: "line",
-                startPosX: u * this.maxUX / 2,
-                startPosY: u * this.maxUY / 2,
-                endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY / 2
+                startPosX: u * this.charUnitW / 2,
+                startPosY: u * this.charUnitH / 2,
+                endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH / 2
               },
               {
                 type: "arc",
-                posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-                posY: u * this.maxUY / 2 + r / 2,
+                posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+                posY: u * this.charUnitH / 2 + r / 2,
                 radius: r,
                 start: - 180 / 2,
                 end: 0
@@ -2058,12 +2059,12 @@ class RGAlphabet {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -2071,8 +2072,8 @@ class RGAlphabet {
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -2080,14 +2081,14 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: 180
@@ -2095,10 +2096,10 @@ class RGAlphabet {
           );
         }
         if (this.char == "4") {
-          if (this.maxUY > this.maxUX) {
-            r = u * (this.maxUX / 2) - this.strokeWeight - offset * 2;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * (this.charUnitW / 2) - this.strokeWeight - offset * 2;
           } else {
-            r = u * (this.maxUY / 2) - this.strokeWeight - offset * 2;
+            r = u * (this.charUnitH / 2) - this.strokeWeight - offset * 2;
           }
           this.parts.push(
             {
@@ -2106,19 +2107,19 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * (this.maxUY / 4 * 3) - r / 2
+              endPosY: u * (this.charUnitH / 4 * 3) - r / 2
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * (this.maxUY / 4 * 3) - r / 2,
+              posY: u * (this.charUnitH / 4 * 3) - r / 2,
               radius: r,
               start: 180 / 2,
               end: 180
@@ -2126,27 +2127,27 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * (this.maxUY / 4 * 3),
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * (this.maxUY / 4 * 3)
+              startPosY: u * (this.charUnitH / 4 * 3),
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * (this.charUnitH / 4 * 3)
             }
           );
         }
         if (this.char == "5") {
-          if (this.maxUY > this.maxUX * 2) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
-            eY = this.maxUY - this.maxUX;
+          if (this.charUnitH > this.charUnitW * 2) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
+            eY = this.charUnitH - this.charUnitW;
             this.parts.push(
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                startPosY: u * this.maxUY / 2 + r / 2,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY - r / 2
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                startPosY: u * this.charUnitH / 2 + r / 2,
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH - r / 2
               }
             );
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH / 2 - this.strokeWeight / 2 - offset;
             eY = 0;
           }
           this.parts.push(
@@ -2155,26 +2156,26 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY / 2
+              endPosY: u * this.charUnitH / 2
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 2
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 2
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY / 2 + r / 2,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH / 2 + r / 2,
               radius: r,
               start: - 180 / 2,
               end: 0
@@ -2183,13 +2184,13 @@ class RGAlphabet {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -2197,14 +2198,14 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: 180
@@ -2212,20 +2213,20 @@ class RGAlphabet {
           );
         }
         if (this.char == "6") {
-          if (this.maxUY > this.maxUX * 2) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
-            eY = this.maxUY - this.maxUX;
+          if (this.charUnitH > this.charUnitW * 2) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
+            eY = this.charUnitH - this.charUnitW;
             this.parts.push(
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                startPosY: u * this.maxUY / 2 + r / 2,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY - r / 2
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                startPosY: u * this.charUnitH / 2 + r / 2,
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH - r / 2
               }
             );
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH / 2 - this.strokeWeight / 2 - offset;
             eY = 0;
           }
           this.parts.push(
@@ -2242,18 +2243,18 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -2262,7 +2263,7 @@ class RGAlphabet {
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY / 2 + r / 2,
+              posY: u * this.charUnitH / 2 + r / 2,
               radius: r,
               start: - 180,
               end: - 180 / 2
@@ -2270,14 +2271,14 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 2
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 2
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY / 2 + r / 2,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH / 2 + r / 2,
               radius: r,
               start: - 180 / 2,
               end: 0
@@ -2286,13 +2287,13 @@ class RGAlphabet {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -2300,14 +2301,14 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: 180
@@ -2315,10 +2316,10 @@ class RGAlphabet {
           );
         }
         if (this.char == "7") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX / 2 - this.strokeWeight - offset * 2;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW / 2 - this.strokeWeight - offset * 2;
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight - offset * 2;
+            r = u * this.charUnitH / 2 - this.strokeWeight - offset * 2;
           }
           this.parts.push(
             {
@@ -2326,97 +2327,97 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY / 4
+              endPosY: u * this.charUnitH / 4
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 2 - r / 2
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 2 - r / 2
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY / 2 - r / 2,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH / 2 - r / 2,
               radius: r,
               start: 0,
               end: 180 / 2
             },
             {
               type: "arc",
-              posX: u * this.maxUX / 2 + r / 2,
-              posY: u * this.maxUY / 2 + r / 2,
+              posX: u * this.charUnitW / 2 + r / 2,
+              posY: u * this.charUnitH / 2 + r / 2,
               radius: r,
               start: 180,
               end: 180 * 1.5
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2 + r / 2,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 2
+              startPosX: u * this.charUnitW / 2 + r / 2,
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 2
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2,
-              startPosY: u * this.maxUY / 2 + r / 2,
-              endPosX: u * this.maxUX / 2,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW / 2,
+              startPosY: u * this.charUnitH / 2 + r / 2,
+              endPosX: u * this.charUnitW / 2,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
         if (this.char == "8") {
-          if (this.maxUY > this.maxUX * 2) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
-            eY = this.maxUY - this.maxUX;
+          if (this.charUnitH > this.charUnitW * 2) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
+            eY = this.charUnitH - this.charUnitW;
             this.parts.push(
               {
                 type: "line",
                 startPosX: this.strokeWeight / 2 + offset,
                 startPosY: r / 2 + this.strokeWeight / 2 + offset,
                 endPosX: this.strokeWeight / 2 + offset,
-                endPosY: u * this.maxUY / 2 - r / 2
+                endPosY: u * this.charUnitH / 2 - r / 2
               },
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
                 startPosY: r / 2 + this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY / 2 - r / 2
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH / 2 - r / 2
               },
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                startPosY: u * this.maxUY / 2 + r / 2,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY - r / 2
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                startPosY: u * this.charUnitH / 2 + r / 2,
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH - r / 2
               },
               {
                 type: "line",
                 startPosX: this.strokeWeight / 2 + offset,
-                startPosY: u * this.maxUY / 2 + r / 2,
+                startPosY: u * this.charUnitH / 2 + r / 2,
                 endPosX: this.strokeWeight / 2 + offset,
-                endPosY: u * this.maxUY - r / 2
+                endPosY: u * this.charUnitH - r / 2
               },
               {
                 type: "line",
-                startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                startPosY: u * this.maxUY / 2 + r / 2,
-                endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY - r / 2
+                startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                startPosY: u * this.charUnitH / 2 + r / 2,
+                endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH - r / 2
               }
             );
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH / 2 - this.strokeWeight / 2 - offset;
             eY = 0;
           }
           this.parts.push(
@@ -2432,12 +2433,12 @@ class RGAlphabet {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -2446,15 +2447,15 @@ class RGAlphabet {
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY / 2 - r / 2,
+              posY: u * this.charUnitH / 2 - r / 2,
               radius: r,
               start: 180 / 2,
               end: 180
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY / 2 - r / 2,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH / 2 - r / 2,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -2462,7 +2463,7 @@ class RGAlphabet {
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY / 2 + r / 2,
+              posY: u * this.charUnitH / 2 + r / 2,
               radius: r,
               start: - 180,
               end: - 180 / 2
@@ -2470,14 +2471,14 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 2
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 2
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY / 2 + r / 2,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH / 2 + r / 2,
               radius: r,
               start: - 180 / 2,
               end: 0
@@ -2486,13 +2487,13 @@ class RGAlphabet {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -2500,14 +2501,14 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: 180
@@ -2515,11 +2516,11 @@ class RGAlphabet {
           );
         }
         if (this.char == "9") {
-          if (this.maxUY > this.maxUX * 2) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
-            eY = this.maxUY - this.maxUX;
+          if (this.charUnitH > this.charUnitW * 2) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
+            eY = this.charUnitH - this.charUnitW;
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH / 2 - this.strokeWeight / 2 - offset;
             eY = 0;
           }
           this.parts.push(
@@ -2536,25 +2537,25 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY / 2 - r / 2
+              endPosY: u * this.charUnitH / 2 - r / 2
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -2563,7 +2564,7 @@ class RGAlphabet {
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY / 2 - r / 2,
+              posY: u * this.charUnitH / 2 - r / 2,
               radius: r,
               start: 180 / 2,
               end: 180
@@ -2571,14 +2572,14 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 2
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 2
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY / 2 - r / 2,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH / 2 - r / 2,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -2587,13 +2588,13 @@ class RGAlphabet {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -2601,14 +2602,14 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: 180
@@ -2616,10 +2617,10 @@ class RGAlphabet {
           );
         }
         if (this.char == "0") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH / 2 - this.strokeWeight / 2 - offset;
           }
           this.parts.push(
             {
@@ -2634,12 +2635,12 @@ class RGAlphabet {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -2650,19 +2651,19 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight  / 2 - offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - this.strokeWeight  / 2 - offset,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: 180
@@ -2670,14 +2671,14 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -2685,8 +2686,8 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              startPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               endPosY: r / 2 + this.strokeWeight / 2 + offset
             }
           );
@@ -2696,7 +2697,7 @@ class RGAlphabet {
             {
               type: "point",
               posX: u + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - this.strokeWeight / 2 - offset,
               radius: this.strokeWeight
             }
           );
@@ -2706,9 +2707,9 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: u * 1.5 + this.strokeWeight / 2 + offset,
-              startPosY: u * (this.maxUY - 1.25) - this.strokeWeight / 2 - offset,
+              startPosY: u * (this.charUnitH - 1.25) - this.strokeWeight / 2 - offset,
               endPosX: u + this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
@@ -2716,27 +2717,27 @@ class RGAlphabet {
           this.parts.push(
             {
               type: "line",
-              startPosX: u * this.maxUX / 2,
+              startPosX: u * this.charUnitW / 2,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 2,
-              endPosY: u * (this.maxUY - 3) - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW / 2,
+              endPosY: u * (this.charUnitH - 3) - this.strokeWeight / 2 - offset
             },
             {
               type: "point",
-              posX: u * this.maxUX / 2,
-              posY: u * this.maxUY - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW / 2,
+              posY: u * this.charUnitH - this.strokeWeight / 2 - offset,
               radius: this.strokeWeight
             }
           );
         }
         if (this.char == "?") {
-          if (this.maxUY > this.maxUX * 2) {
-            r = u * this.maxUX - this.strokeWeight / 2 - offset;
-            eY = this.maxUY - this.maxUX;
+          if (this.charUnitH > this.charUnitW * 2) {
+            r = u * this.charUnitW - this.strokeWeight / 2 - offset;
+            eY = this.charUnitH - this.charUnitW;
             this.parts.push(
             );
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight / 2 - offset;
+            r = u * this.charUnitH / 2 - this.strokeWeight / 2 - offset;
             eY = 0;
             this.parts.push(
 
@@ -2753,28 +2754,28 @@ class RGAlphabet {
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 2 - r / 4 - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 2 - r / 4 - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2 + r / 4,
-              startPosY: u * this.maxUY / 2 - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - r / 4 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 2 - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW / 2 + r / 4,
+              startPosY: u * this.charUnitH / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 4 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -2782,31 +2783,31 @@ class RGAlphabet {
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 4 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY / 2 - r / 4 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 4 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH / 2 - r / 4 - this.strokeWeight / 2 - offset,
               radius: r / 2,
               start: 0,
               end: 180 / 2
             },
             {
               type: "arc",
-              posX: u * this.maxUX / 2 + r / 4,
-              posY: u * this.maxUY / 2 + r / 4 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW / 2 + r / 4,
+              posY: u * this.charUnitH / 2 + r / 4 - this.strokeWeight / 2 - offset,
               radius: r / 2,
               start: - 180,
               end: - 180 / 2
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2,
-              startPosY: u * this.maxUY / 2 + r / 4 - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX / 2,
-              endPosY: u * (this.maxUY - 3) - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW / 2,
+              startPosY: u * this.charUnitH / 2 + r / 4 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW / 2,
+              endPosY: u * (this.charUnitH - 3) - this.strokeWeight / 2 - offset
             },
             {
               type: "point",
-              posX: u * this.maxUX / 2,
-              posY: u * this.maxUY - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW / 2,
+              posY: u * this.charUnitH - this.strokeWeight / 2 - offset,
               radius: this.strokeWeight
             }
           );
@@ -2816,15 +2817,15 @@ class RGAlphabet {
             {
               type: "point",
               posX: u * 1.5 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY / 2,
+              posY: u * this.charUnitH / 2,
               radius: this.strokeWeight
             },
             {
               type: "line",
               startPosX: u * 1.5 + this.strokeWeight / 2 + offset,
-              startPosY: u * (this.maxUY - 1.25) - this.strokeWeight / 2 - offset,
+              startPosY: u * (this.charUnitH - 1.25) - this.strokeWeight / 2 - offset,
               endPosX: u + this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
@@ -2833,13 +2834,13 @@ class RGAlphabet {
             {
               type: "point",
               posX: u + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY / 2,
+              posY: u * this.charUnitH / 2,
               radius: this.strokeWeight
             },
             {
               type: "point",
               posX: u + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - this.strokeWeight / 2 - offset,
               radius: this.strokeWeight
             }
           );
@@ -2848,10 +2849,10 @@ class RGAlphabet {
           this.parts.push(
             {
               type: "line",
-              startPosX: u * this.maxUX / 4,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * this.maxUX - u * this.maxUX / 4,
-              endPosY: u * this.maxUY / 2
+              startPosX: u * this.charUnitW / 4,
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * this.charUnitW - u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH / 2
             }
           );
         }
@@ -2859,17 +2860,17 @@ class RGAlphabet {
           this.parts.push(
             {
               type: "line",
-              startPosX: u * this.maxUX / 4,
-              startPosY: u * this.maxUY / 2.5,
-              endPosX: u * this.maxUX - u * this.maxUX / 4,
-              endPosY: u * this.maxUY / 2.5
+              startPosX: u * this.charUnitW / 4,
+              startPosY: u * this.charUnitH / 2.5,
+              endPosX: u * this.charUnitW - u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH / 2.5
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 4,
-              startPosY: u * this.maxUY - u * this.maxUY / 2.5,
-              endPosX: u * this.maxUX - u * this.maxUX / 4,
-              endPosY: u * this.maxUY - u * this.maxUY / 2.5
+              startPosX: u * this.charUnitW / 4,
+              startPosY: u * this.charUnitH - u * this.charUnitH / 2.5,
+              endPosX: u * this.charUnitW - u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH - u * this.charUnitH / 2.5
             }
           );
         }
@@ -2877,17 +2878,17 @@ class RGAlphabet {
           this.parts.push(
             {
               type: "line",
-              startPosX: u * this.maxUX / 4,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * this.maxUX - u * this.maxUX / 4,
-              endPosY: u * this.maxUY / 2
+              startPosX: u * this.charUnitW / 4,
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * this.charUnitW - u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH / 2
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2,
-              startPosY: u * this.maxUY / 4,
-              endPosX: u * this.maxUX - u * this.maxUX / 2,
-              endPosY: u * this.maxUY - u * this.maxUY / 4
+              startPosX: u * this.charUnitW / 2,
+              startPosY: u * this.charUnitH / 4,
+              endPosX: u * this.charUnitW - u * this.charUnitW / 2,
+              endPosY: u * this.charUnitH - u * this.charUnitH / 4
             }
           );
         }
@@ -2895,10 +2896,10 @@ class RGAlphabet {
           this.parts.push(
             {
               type: "line",
-              startPosX: u * this.maxUX - u * this.maxUX / 4,
+              startPosX: u * this.charUnitW - u * this.charUnitW / 4,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 4,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
@@ -2906,18 +2907,18 @@ class RGAlphabet {
           this.parts.push(
             {
               type: "line",
-              startPosX: u * this.maxUX / 4,
+              startPosX: u * this.charUnitW / 4,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - u * this.maxUX / 4,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
         if (this.char == "*") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX / 4;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW / 4;
           } else {
-            r = u * this.maxUY / 4;
+            r = u * this.charUnitH / 4;
           }
           for (let theta = 180; theta < 360 + 180; theta+=360 / 6) {
             let pos = calcPos(r, theta, 6);
@@ -2926,10 +2927,10 @@ class RGAlphabet {
             this.parts.push(
               {
                 type: "line",
-                startPosX: u * this.maxUX / 2,
-                startPosY: u * this.maxUY / 2,
-                endPosX: u * this.maxUX / 2 + x,
-                endPosY: u * this.maxUY / 2 + y
+                startPosX: u * this.charUnitW / 2,
+                startPosY: u * this.charUnitH / 2,
+                endPosX: u * this.charUnitW / 2 + x,
+                endPosY: u * this.charUnitH / 2 + y
               }
             );
           }
@@ -2938,94 +2939,94 @@ class RGAlphabet {
           this.parts.push(
             {
               type: "line",
-              startPosX: u * this.maxUX / 3,
+              startPosX: u * this.charUnitW / 3,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 4,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - u * this.maxUX / 4,
+              startPosX: u * this.charUnitW - u * this.charUnitW / 4,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - u * this.maxUX / 3,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - u * this.charUnitW / 3,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 14,
-              startPosY: u * this.maxUY / 4,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 4
+              startPosX: u * this.charUnitW / 14,
+              startPosY: u * this.charUnitH / 4,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 4
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - u * this.maxUY / 4,
-              endPosX: u * this.maxUX - u * this.maxUX / 14,
-              endPosY: u * this.maxUY - u * this.maxUY / 4
+              startPosY: u * this.charUnitH - u * this.charUnitH / 4,
+              endPosX: u * this.charUnitW - u * this.charUnitW / 14,
+              endPosY: u * this.charUnitH - u * this.charUnitH / 4
             }
           );
         }
         if (this.char == "$") {
-          if (this.maxUY - this.maxUY / 4 > this.maxUX * 2) {
-            r = u * this.maxUX - u * this.maxUX / 4 - this.strokeWeight / 2 - offset;
+          if (this.charUnitH - this.charUnitH / 4 > this.charUnitW * 2) {
+            r = u * this.charUnitW - u * this.charUnitW / 4 - this.strokeWeight / 2 - offset;
           } else {
-            r = (u * this.maxUY - u * this.maxUY / 4) / 2 - this.strokeWeight / 2 - offset;
+            r = (u * this.charUnitH - u * this.charUnitH / 4) / 2 - this.strokeWeight / 2 - offset;
           }
           this.parts.push(
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY / 8 + r / 2,
+              startPosY: u * this.charUnitH / 8 + r / 2,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY / 2 - r / 2
+              endPosY: u * this.charUnitH / 2 - r / 2
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              startPosY: u * this.maxUY / 2 + r / 2,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - u * this.maxUY / 8 - r / 2
-            },
-            {
-              type: "line",
-              startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 2
-            },
-            {
-              type: "line",
-              startPosX: u * this.maxUX / 3,
-              startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 3,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
-            },
-            {
-              type: "line",
-              startPosX: u * this.maxUX - u * this.maxUX / 3,
-              startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - u * this.maxUX / 3,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              startPosY: u * this.charUnitH / 2 + r / 2,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - u * this.charUnitH / 8 - r / 2
             },
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY / 8,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 8
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 2
+            },
+            {
+              type: "line",
+              startPosX: u * this.charUnitW / 3,
+              startPosY: this.strokeWeight / 2 + offset,
+              endPosX: u * this.charUnitW / 3,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
+            },
+            {
+              type: "line",
+              startPosX: u * this.charUnitW - u * this.charUnitW / 3,
+              startPosY: this.strokeWeight / 2 + offset,
+              endPosX: u * this.charUnitW - u * this.charUnitW / 3,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
+            },
+            {
+              type: "line",
+              startPosX: r / 2 + this.strokeWeight / 2 + offset,
+              startPosY: u * this.charUnitH / 8,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 8
             },
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - u * this.maxUY / 8,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - u * this.maxUY / 8
+              startPosY: u * this.charUnitH - u * this.charUnitH / 8,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - u * this.charUnitH / 8
             },
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY / 8 + r / 2,
+              posY: u * this.charUnitH / 8 + r / 2,
               radius: r,
               start: - 180,
               end: - 180 / 2
@@ -3033,23 +3034,23 @@ class RGAlphabet {
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY / 2 - r / 2,
+              posY: u * this.charUnitH / 2 - r / 2,
               radius: r,
               start: 180 / 2,
               end: 180
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY / 2 + r / 2,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH / 2 + r / 2,
               radius: r,
               start: - 180 / 2,
               end: 0
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - u * this.maxUY / 8 - r / 2,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - u * this.charUnitH / 8 - r / 2,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -3057,10 +3058,10 @@ class RGAlphabet {
           );
         }
         if (this.char == "¥") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX - this.strokeWeight - offset * 2;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW - this.strokeWeight - offset * 2;
           } else {
-            r = u * this.maxUY - this.strokeWeight - offset * 2;
+            r = u * this.charUnitH - this.strokeWeight - offset * 2;
           }
           this.parts.push(
             {
@@ -3073,7 +3074,7 @@ class RGAlphabet {
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               posY: this.strokeWeight / 2 + offset,
               radius: r,
               start: 0,
@@ -3082,46 +3083,46 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 2
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 2
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2,
+              startPosX: u * this.charUnitW / 2,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 2,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW / 2,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2 - u * this.maxUX / 4,
-              startPosY: u * this.maxUY / 2 + u * this.maxUY / 8,
-              endPosX: u * this.maxUX / 2 + u * this.maxUX / 4,
-              endPosY: u * this.maxUY / 2 + u * this.maxUY / 8
+              startPosX: u * this.charUnitW / 2 - u * this.charUnitW / 4,
+              startPosY: u * this.charUnitH / 2 + u * this.charUnitH / 8,
+              endPosX: u * this.charUnitW / 2 + u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH / 2 + u * this.charUnitH / 8
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2 - u * this.maxUX / 4,
-              startPosY: u * this.maxUY / 2 + u * this.maxUY / 4,
-              endPosX: u * this.maxUX / 2 + u * this.maxUX / 4,
-              endPosY: u * this.maxUY / 2 + u * this.maxUY / 4
+              startPosX: u * this.charUnitW / 2 - u * this.charUnitW / 4,
+              startPosY: u * this.charUnitH / 2 + u * this.charUnitH / 4,
+              endPosX: u * this.charUnitW / 2 + u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH / 2 + u * this.charUnitH / 4
             }
           );
         }
         if (this.char == "&") {
           let lr;
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX / 2 - this.strokeWeight - offset * 2;
-            lr = (u * this.maxUY - r / 2 - this.strokeWeight - offset * 2) * 2;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW / 2 - this.strokeWeight - offset * 2;
+            lr = (u * this.charUnitH - r / 2 - this.strokeWeight - offset * 2) * 2;
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight - offset * 2;
-            lr = (u * this.maxUY - r / 2 - this.strokeWeight - offset * 2) * 2;
+            r = u * this.charUnitH / 2 - this.strokeWeight - offset * 2;
+            lr = (u * this.charUnitH - r / 2 - this.strokeWeight - offset * 2) * 2;
           }
           this.parts.push(
             {
               type: "arc",
-              posX: u * this.maxUX / 6 + r / 2 + this.strokeWeight / 2 + offset,
+              posX: u * this.charUnitW / 6 + r / 2 + this.strokeWeight / 2 + offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180,
@@ -3129,14 +3130,14 @@ class RGAlphabet {
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 6 + r / 2 + this.strokeWeight / 2 + offset,
+              startPosX: u * this.charUnitW / 6 + r / 2 + this.strokeWeight / 2 + offset,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - (u * this.maxUX / 6 + r / 2) - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - (u * this.charUnitW / 6 + r / 2) - this.strokeWeight / 2 - offset,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - u * this.maxUX / 6 - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - u * this.charUnitW / 6 - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -3144,15 +3145,15 @@ class RGAlphabet {
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - u * this.maxUX / 6 - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW - u * this.charUnitW / 6 - this.strokeWeight / 2 - offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - u * this.maxUX / 6 - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 2 - r / 2
+              endPosX: u * this.charUnitW - u * this.charUnitW / 6 - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 2 - r / 2
             },
             {
               type: "arc",
-              posX: u * this.maxUX - u * this.maxUX / 6 - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY / 2 - r / 2,
+              posX: u * this.charUnitW - u * this.charUnitW / 6 - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH / 2 - r / 2,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -3160,14 +3161,14 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * this.maxUX - (u * this.maxUX / 6 + r / 2) - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY / 2
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * this.charUnitW - (u * this.charUnitW / 6 + r / 2) - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH / 2
             },
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY / 2 + r / 2,
+              posY: u * this.charUnitH / 2 + r / 2,
               radius: r,
               start: - 180,
               end: - 180 / 2
@@ -3175,14 +3176,14 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY / 2 + r / 2,
+              startPosY: u * this.charUnitH / 2 + r / 2,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: 180
@@ -3190,23 +3191,23 @@ class RGAlphabet {
             {
               type: "line",
               startPosX: r / 2 + this.strokeWeight / 2 + offset,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - r * 1.5 / 2,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r * 1.5 / 2,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r * 1.5 / 2,
-              posY: u * this.maxUY - r * 1.5 / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r * 1.5 / 2,
+              posY: u * this.charUnitH - r * 1.5 / 2 - this.strokeWeight / 2 - offset,
               radius: r * 1.5,
               start: 0,
               end: 180 / 2
             },
             {
               type: "arc",
-              posX: u * this.maxUX,
-              posY: u * this.maxUY - lr / 2 - this.strokeWeight / 2 - offset,
-              radius: (u * this.maxUX - u * this.maxUX / 6) * 2 - this.strokeWeight / 2 - offset * 2,
+              posX: u * this.charUnitW,
+              posY: u * this.charUnitH - lr / 2 - this.strokeWeight / 2 - offset,
+              radius: (u * this.charUnitW - u * this.charUnitW / 6) * 2 - this.strokeWeight / 2 - offset * 2,
               radiusY: lr,
               start: 180 / 2,
               end: 180
@@ -3214,8 +3215,8 @@ class RGAlphabet {
           );
         }
         if (this.char == "@") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX - this.strokeWeight - offset * 2;
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW - this.strokeWeight - offset * 2;
             this.parts.push(
               // 外
               {
@@ -3223,7 +3224,7 @@ class RGAlphabet {
                 startPosX: this.strokeWeight / 2 + offset,
                 startPosY: r / 2 + this.strokeWeight / 2 + offset,
                 endPosX: this.strokeWeight / 2 + offset,
-                endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+                endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
               },
               // 内
               {
@@ -3231,41 +3232,41 @@ class RGAlphabet {
                 startPosX: r / 2 - r / 1.75 / 2 + this.strokeWeight / 2 + offset,
                 startPosY: r / 2 + this.strokeWeight / 2 + offset,
                 endPosX: r / 2 - r / 1.75 / 2 + this.strokeWeight / 2 + offset,
-                endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+                endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
               }
             );
           } else {
-            r = u * this.maxUY - this.strokeWeight - offset * 2;
+            r = u * this.charUnitH - this.strokeWeight - offset * 2;
             this.parts.push(
               // 外
               {
                 type: "line",
                 startPosX: r / 2 + this.strokeWeight / 2 + offset,
                 startPosY: this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
                 endPosY: this.strokeWeight / 2 + offset
               },
               {
                 type: "line",
                 startPosX: r / 2 + this.strokeWeight / 2 + offset,
-                startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-                endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+                startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
               },
               // 内
               {
                 type: "line",
                 startPosX: r / 2 + this.strokeWeight / 2 + offset,
                 startPosY: r / 2 - r / 1.75 / 2 + this.strokeWeight / 2 + offset,
-                endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
                 endPosY: r / 2 - r / 1.75 / 2 + this.strokeWeight / 2 + offset
               },
               {
                 type: "line",
                 startPosX: r / 2 + this.strokeWeight / 2 + offset,
-                startPosY: u * this.maxUY - (r / 2 - r / 1.75 / 2) - this.strokeWeight / 2 - offset,
-                endPosX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-                endPosY: u * this.maxUY - (r / 2 - r / 1.75 / 2) - this.strokeWeight / 2 - offset
+                startPosY: u * this.charUnitH - (r / 2 - r / 1.75 / 2) - this.strokeWeight / 2 - offset,
+                endPosX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+                endPosY: u * this.charUnitH - (r / 2 - r / 1.75 / 2) - this.strokeWeight / 2 - offset
               }
             );
           }
@@ -3282,14 +3283,14 @@ class RGAlphabet {
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: - 180
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -3297,18 +3298,18 @@ class RGAlphabet {
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 3,
               end: 180 / 2
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - r / 2.5 - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - r / 2.5 - this.strokeWeight / 2 - offset
             },
             // 内
             {
@@ -3322,14 +3323,14 @@ class RGAlphabet {
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r / 1.75,
               start: 180 / 2,
               end: - 180
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r / 1.75,
               start: - 180 / 2,
@@ -3337,24 +3338,24 @@ class RGAlphabet {
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r / 1.75,
               start: 0,
               end: 180 / 2
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - (r / 2 - r / 1.75 / 2) - this.strokeWeight / 2 - offset,
+              startPosX: u * this.charUnitW - (r / 2 - r / 1.75 / 2) - this.strokeWeight / 2 - offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - (r / 2 - r / 1.75 / 2) - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - r / 2.5 - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - (r / 2 - r / 1.75 / 2) - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - r / 2.5 - this.strokeWeight / 2 - offset
             },
             // つなぎ
             {
               type: "arc",
-              posX: u * this.maxUX - (r - r / 1.75) / 4 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2.5 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - (r - r / 1.75) / 4 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2.5 - this.strokeWeight / 2 - offset,
               radius: (r - r / 1.75) / 2,
               start: 0,
               end: 180
@@ -3362,18 +3363,18 @@ class RGAlphabet {
           );
         }
         if (this.char == "%") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX / 2 - this.strokeWeight - offset * 2
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW / 2 - this.strokeWeight - offset * 2
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight - offset * 2
+            r = u * this.charUnitH / 2 - this.strokeWeight - offset * 2
           }
           this.parts.push(
             {
               type: "line",
-              startPosX: u * this.maxUX - u * this.maxUX / 4,
+              startPosX: u * this.charUnitW - u * this.charUnitW / 4,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 4,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
@@ -3386,23 +3387,23 @@ class RGAlphabet {
             {
               type: "arc",
               posX: r / 2 + this.strokeWeight / 2 + offset,
-              posY: r / 2 + u * this.maxUY / 8 + this.strokeWeight / 2 + offset,
+              posY: r / 2 + u * this.charUnitH / 8 + this.strokeWeight / 2 + offset,
               radius: r,
               start: 0,
               end: 180
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - u * this.maxUY / 8 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - u * this.charUnitH / 8 - this.strokeWeight / 2 - offset,
               radius: r,
               start: - 180,
               end: 0
             },
             {
               type: "arc",
-              posX: u * this.maxUX - r / 2 - this.strokeWeight / 2 - offset,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - r / 2 - this.strokeWeight / 2 - offset,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180
@@ -3412,41 +3413,41 @@ class RGAlphabet {
               startPosX: this.strokeWeight / 2 + offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
               endPosX: this.strokeWeight / 2 + offset,
-              endPosY: r / 2 + u * this.maxUY / 8 + this.strokeWeight / 2 + offset
+              endPosY: r / 2 + u * this.charUnitH / 8 + this.strokeWeight / 2 + offset
             },
             {
               type: "line",
               startPosX: r + this.strokeWeight / 2 + offset,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
               endPosX: r + this.strokeWeight / 2 + offset,
-              endPosY: r / 2 + u * this.maxUY / 8 + this.strokeWeight / 2 + offset
+              endPosY: r / 2 + u * this.charUnitH / 8 + this.strokeWeight / 2 + offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - r - this.strokeWeight / 2 - offset,
-              startPosY: u * this.maxUY - u * this.maxUY / 8 - r / 2 - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - r - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW - r - this.strokeWeight / 2 - offset,
+              startPosY: u * this.charUnitH - u * this.charUnitH / 8 - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - r - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              startPosY: u * this.maxUY - u * this.maxUY / 8 - r / 2 - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - this.strokeWeight / 2 - offset,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              startPosY: u * this.charUnitH - u * this.charUnitH / 8 - r / 2 - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - this.strokeWeight / 2 - offset,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             }
           );
         }
         if (this.char == "(") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX - this.strokeWeight - offset * 2
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW - this.strokeWeight - offset * 2
           } else {
-            r = u * this.maxUY - this.strokeWeight - offset * 2
+            r = u * this.charUnitH - this.strokeWeight - offset * 2
           }
           this.parts.push(
             {
               type: "arc",
-              posX: u * this.maxUX / 4 + r / 2,
+              posX: u * this.charUnitW / 4 + r / 2,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180,
@@ -3454,15 +3455,15 @@ class RGAlphabet {
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 4,
+              startPosX: u * this.charUnitW / 4,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 4,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX / 4 + r / 2,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW / 4 + r / 2,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: 180
@@ -3470,15 +3471,15 @@ class RGAlphabet {
           );
         }
         if (this.char == ")") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX - this.strokeWeight - offset * 2
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW - this.strokeWeight - offset * 2
           } else {
-            r = u * this.maxUY - this.strokeWeight - offset * 2
+            r = u * this.charUnitH - this.strokeWeight - offset * 2
           }
           this.parts.push(
             {
               type: "arc",
-              posX: u * this.maxUX - u * this.maxUX / 4 - r / 2,
+              posX: u * this.charUnitW - u * this.charUnitW / 4 - r / 2,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -3486,15 +3487,15 @@ class RGAlphabet {
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - u * this.maxUX / 4,
+              startPosX: u * this.charUnitW - u * this.charUnitW / 4,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - u * this.maxUX / 4,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - u * this.maxUX / 4 - r / 2,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - u * this.charUnitW / 4 - r / 2,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -3505,24 +3506,24 @@ class RGAlphabet {
           this.parts.push(
             {
               type: "line",
-              startPosX: u * this.maxUX / 4,
+              startPosX: u * this.charUnitW / 4,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 2 + u * this.maxUX / 6,
+              endPosX: u * this.charUnitW / 2 + u * this.charUnitW / 6,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 4,
+              startPosX: u * this.charUnitW / 4,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 4,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 4,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX / 2 + u * this.maxUX / 6,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW / 4,
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW / 2 + u * this.charUnitW / 6,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
@@ -3530,24 +3531,24 @@ class RGAlphabet {
           this.parts.push(
             {
               type: "line",
-              startPosX: u * this.maxUX / 2 - u * this.maxUX / 6,
+              startPosX: u * this.charUnitW / 2 - u * this.charUnitW / 6,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - u * this.maxUX / 4,
+              endPosX: u * this.charUnitW - u * this.charUnitW / 4,
               endPosY: this.strokeWeight / 2 + offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - u * this.maxUX / 4,
+              startPosX: u * this.charUnitW - u * this.charUnitW / 4,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - u * this.maxUX / 4,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              endPosX: u * this.charUnitW - u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2 - u * this.maxUX / 6,
-              startPosY: u * this.maxUY - this.strokeWeight / 2 - offset,
-              endPosX: u * this.maxUX - u * this.maxUX / 4,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW / 2 - u * this.charUnitW / 6,
+              startPosY: u * this.charUnitH - this.strokeWeight / 2 - offset,
+              endPosX: u * this.charUnitW - u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
@@ -3555,17 +3556,17 @@ class RGAlphabet {
           this.parts.push(
             {
               type: "line",
-              startPosX: u * this.maxUX / 2 + u * this.maxUX / 6,
+              startPosX: u * this.charUnitW / 2 + u * this.charUnitW / 6,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 4,
-              endPosY: u * this.maxUY / 2
+              endPosX: u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH / 2
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 4,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * this.maxUX / 2 + u * this.maxUX / 6,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW / 4,
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * this.charUnitW / 2 + u * this.charUnitW / 6,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
@@ -3573,30 +3574,30 @@ class RGAlphabet {
           this.parts.push(
             {
               type: "line",
-              startPosX: u * this.maxUX / 2 - u * this.maxUX / 6,
+              startPosX: u * this.charUnitW / 2 - u * this.charUnitW / 6,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - u * this.maxUX / 4,
-              endPosY: u * this.maxUY / 2
+              endPosX: u * this.charUnitW - u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH / 2
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - u * this.maxUX / 4,
-              startPosY: u * this.maxUY / 2,
-              endPosX: u * this.maxUX / 2 - u * this.maxUX / 6,
-              endPosY: u * this.maxUY - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW - u * this.charUnitW / 4,
+              startPosY: u * this.charUnitH / 2,
+              endPosX: u * this.charUnitW / 2 - u * this.charUnitW / 6,
+              endPosY: u * this.charUnitH - this.strokeWeight / 2 - offset
             }
           );
         }
         if (this.char == "{") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX / 2 - this.strokeWeight - offset * 2
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW / 2 - this.strokeWeight - offset * 2
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight - offset * 2
+            r = u * this.charUnitH / 2 - this.strokeWeight - offset * 2
           }
           this.parts.push(
             {
               type: "arc",
-              posX: u * this.maxUX / 4 + r,
+              posX: u * this.charUnitW / 4 + r,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180,
@@ -3604,38 +3605,38 @@ class RGAlphabet {
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 4 + r / 2,
+              startPosX: u * this.charUnitW / 4 + r / 2,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 4 + r / 2,
-              endPosY: u * this.maxUY / 2 - r / 4
+              endPosX: u * this.charUnitW / 4 + r / 2,
+              endPosY: u * this.charUnitH / 2 - r / 4
             },
             {
               type: "arc",
-              posX: u * this.maxUX / 4 + r / 4,
-              posY: u * this.maxUY / 2 - r / 4,
+              posX: u * this.charUnitW / 4 + r / 4,
+              posY: u * this.charUnitH / 2 - r / 4,
               radius: r / 2,
               start: 0,
               end: 180 / 2
             },
             {
               type: "arc",
-              posX: u * this.maxUX / 4 + r / 4,
-              posY: u * this.maxUY / 2 + r / 4,
+              posX: u * this.charUnitW / 4 + r / 4,
+              posY: u * this.charUnitH / 2 + r / 4,
               radius: r / 2,
               start: - 180 / 2,
               end: 0
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 4 + r / 2,
-              startPosY: u * this.maxUY / 2 + r / 4,
-              endPosX: u * this.maxUX / 4 + r / 2,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW / 4 + r / 2,
+              startPosY: u * this.charUnitH / 2 + r / 4,
+              endPosX: u * this.charUnitW / 4 + r / 2,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX / 4 + r,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW / 4 + r,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 180 / 2,
               end: 180
@@ -3643,15 +3644,15 @@ class RGAlphabet {
           );
         }
         if (this.char == "}") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX / 2 - this.strokeWeight - offset * 2
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW / 2 - this.strokeWeight - offset * 2
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight - offset * 2
+            r = u * this.charUnitH / 2 - this.strokeWeight - offset * 2
           }
           this.parts.push(
             {
               type: "arc",
-              posX: u * this.maxUX - u * this.maxUX / 4 - r,
+              posX: u * this.charUnitW - u * this.charUnitW / 4 - r,
               posY: r / 2 + this.strokeWeight / 2 + offset,
               radius: r,
               start: - 180 / 2,
@@ -3659,38 +3660,38 @@ class RGAlphabet {
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - u * this.maxUX / 4 - r / 2,
+              startPosX: u * this.charUnitW - u * this.charUnitW / 4 - r / 2,
               startPosY: r / 2 + this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - u * this.maxUX / 4 - r / 2,
-              endPosY: u * this.maxUY / 2 - r / 4
+              endPosX: u * this.charUnitW - u * this.charUnitW / 4 - r / 2,
+              endPosY: u * this.charUnitH / 2 - r / 4
             },
             {
               type: "arc",
-              posX: u * this.maxUX - u * this.maxUX / 4 - r / 4,
-              posY: u * this.maxUY / 2 - r / 4,
+              posX: u * this.charUnitW - u * this.charUnitW / 4 - r / 4,
+              posY: u * this.charUnitH / 2 - r / 4,
               radius: r / 2,
               start: 180 / 2,
               end: - 180
             },
             {
               type: "arc",
-              posX: u * this.maxUX - u * this.maxUX / 4 - r / 4,
-              posY: u * this.maxUY / 2 + r / 4,
+              posX: u * this.charUnitW - u * this.charUnitW / 4 - r / 4,
+              posY: u * this.charUnitH / 2 + r / 4,
               radius: r / 2,
               start: - 180,
               end: - 180 / 2
             },
             {
               type: "line",
-              startPosX: u * this.maxUX - u * this.maxUX / 4 - r / 2,
-              startPosY: u * this.maxUY / 2 + r / 4,
-              endPosX: u * this.maxUX - u * this.maxUX / 4 - r / 2,
-              endPosY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset
+              startPosX: u * this.charUnitW - u * this.charUnitW / 4 - r / 2,
+              startPosY: u * this.charUnitH / 2 + r / 4,
+              endPosX: u * this.charUnitW - u * this.charUnitW / 4 - r / 2,
+              endPosY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset
             },
             {
               type: "arc",
-              posX: u * this.maxUX - u * this.maxUX / 4 - r,
-              posY: u * this.maxUY - r / 2 - this.strokeWeight / 2 - offset,
+              posX: u * this.charUnitW - u * this.charUnitW / 4 - r,
+              posY: u * this.charUnitH - r / 2 - this.strokeWeight / 2 - offset,
               radius: r,
               start: 0,
               end: 180 / 2
@@ -3701,10 +3702,10 @@ class RGAlphabet {
           this.parts.push(
             {
               type: "line",
-              startPosX: u * this.maxUX / 2,
+              startPosX: u * this.charUnitW / 2,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 2,
-              endPosY: u * this.maxUY / 6
+              endPosX: u * this.charUnitW / 2,
+              endPosY: u * this.charUnitH / 6
             }
           );
         }
@@ -3712,17 +3713,17 @@ class RGAlphabet {
           this.parts.push(
             {
               type: "line",
-              startPosX: u * (this.maxUX / 2 - 1),
+              startPosX: u * (this.charUnitW / 2 - 1),
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * (this.maxUX / 2 - 1),
-              endPosY: u * this.maxUY / 6
+              endPosX: u * (this.charUnitW / 2 - 1),
+              endPosY: u * this.charUnitH / 6
             },
             {
               type: "line",
-              startPosX: u * (this.maxUX / 2 + 1),
+              startPosX: u * (this.charUnitW / 2 + 1),
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * (this.maxUX / 2 + 1),
-              endPosY: u * this.maxUY / 6
+              endPosX: u * (this.charUnitW / 2 + 1),
+              endPosY: u * this.charUnitH / 6
             }
           );
         }
@@ -3730,39 +3731,39 @@ class RGAlphabet {
           this.parts.push(
             {
               type: "line",
-              startPosX: u * this.maxUX / 2,
+              startPosX: u * this.charUnitW / 2,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX / 4,
-              endPosY: u * this.maxUY / 6
+              endPosX: u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH / 6
             },
             {
               type: "line",
-              startPosX: u * this.maxUX / 2,
+              startPosX: u * this.charUnitW / 2,
               startPosY: this.strokeWeight / 2 + offset,
-              endPosX: u * this.maxUX - u * this.maxUX / 4,
-              endPosY: u * this.maxUY / 6
+              endPosX: u * this.charUnitW - u * this.charUnitW / 4,
+              endPosY: u * this.charUnitH / 6
             }
           );
         }
         if (this.char == "~") {
-          if (this.maxUY > this.maxUX) {
-            r = u * this.maxUX / 2 - this.strokeWeight / 2 - offset
+          if (this.charUnitH > this.charUnitW) {
+            r = u * this.charUnitW / 2 - this.strokeWeight / 2 - offset
           } else {
-            r = u * this.maxUY / 2 - this.strokeWeight / 2 - offset
+            r = u * this.charUnitH / 2 - this.strokeWeight / 2 - offset
           }
           this.parts.push(
             {
               type: "arc",
-              posX: u * this.maxUX / 2 - r / 2,
-              posY: u * this.maxUY / 2,
+              posX: u * this.charUnitW / 2 - r / 2,
+              posY: u * this.charUnitH / 2,
               radius: r,
               start: - 180,
               end: 0
             },
             {
               type: "arc",
-              posX: u * this.maxUX / 2 + r / 2,
-              posY: u * this.maxUY / 2,
+              posX: u * this.charUnitW / 2 + r / 2,
+              posY: u * this.charUnitH / 2,
               radius: r,
               start: 0,
               end: 180
@@ -3778,7 +3779,7 @@ class RGAlphabet {
             type: "rect",
             posX: u * 2 + offset,
             posY: offset,
-            width: u * (this.maxUX - 4) - offset * 2,
+            width: u * (this.charUnitW - 4) - offset * 2,
             height: u
           },
           {
@@ -3790,7 +3791,7 @@ class RGAlphabet {
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 2) - offset,
+            posX: u * (this.charUnitW - 2) - offset,
             posY: u + offset,
             width: u,
             height: u
@@ -3800,20 +3801,20 @@ class RGAlphabet {
             posX: offset,
             posY: u * 2 + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: u * 2 + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           });
         }
@@ -3823,41 +3824,41 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 3) - offset * 2,
+            width: u * (this.charUnitW - 3) - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 2) - offset,
+            posX: u * (this.charUnitW - 2) - offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
-            posY: u * ((this.maxUY - 1) / 2),
+            posX: u * (this.charUnitW - 1) - offset,
+            posY: u * ((this.charUnitH - 1) / 2),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 + 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 + 1) - offset
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           });
         }
@@ -3866,7 +3867,7 @@ class RGAlphabet {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 1) - offset * 2,
+            width: u * (this.charUnitW - 1) - offset * 2,
             height: u
           },
           {
@@ -3874,13 +3875,13 @@ class RGAlphabet {
             posX: offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 1) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 1) - offset * 2,
             height: u
           });
         }
@@ -3890,34 +3891,34 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 3) - offset * 2,
+            width: u * (this.charUnitW - 3) - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 2) - offset,
+            posX: u * (this.charUnitW - 2) - offset,
             posY: u + offset,
             width: u,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: u * 2 + offset,
             width: u,
-            height: u * (this.maxUY - 3) - offset * 2
+            height: u * (this.charUnitH - 3) - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           });
         }
@@ -3927,27 +3928,27 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 1) - offset * 2,
+            width: u * (this.charUnitW - 1) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 1) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 1) - offset * 2,
             height: u
           });
         }
@@ -3957,20 +3958,20 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 1) - offset * 2,
+            width: u * (this.charUnitW - 1) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 3) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 3) - offset * 2,
             height: u
           });
         }
@@ -3979,7 +3980,7 @@ class RGAlphabet {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 1) - offset * 2,
+            width: u * (this.charUnitW - 1) - offset * 2,
             height: u
           },
           {
@@ -3987,27 +3988,27 @@ class RGAlphabet {
             posX: offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
-            posY: u * ((this.maxUY - 1) / 2) + offset,
+            posX: u * (this.charUnitW - 1) - offset,
+            posY: u * ((this.charUnitH - 1) / 2) + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 + 1) - offset * 2
+            height: u * ((this.charUnitH - 1) / 2 + 1) - offset * 2
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2) + offset,
-            posY: u * ((this.maxUY - 1) / 2) + offset,
-            width: u * ((this.maxUX - 1) / 2) - offset * 2,
+            posX: u * ((this.charUnitW - 1) / 2) + offset,
+            posY: u * ((this.charUnitH - 1) / 2) + offset,
+            width: u * ((this.charUnitW - 1) / 2) - offset * 2,
             height: u
           });
         }
@@ -4017,66 +4018,66 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           });
         }
         if (this.char == "I") {
           this.parts.push({
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
+            posX: u * ((this.charUnitW - 1) / 2),
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           },
           {
             type: "rect",
             posX: offset,
             posY: offset,
-            width: u * this.maxUX - offset * 2,
+            width: u * this.charUnitW - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * this.maxUX - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * this.charUnitW - offset * 2,
             height: u
           });
         }
         if (this.char == "J") {
           this.parts.push({
             type: "rect",
-            posX: u * (this.maxUX - 2) - offset,
+            posX: u * (this.charUnitW - 2) - offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           },
           {
             type: "rect",
             posX: offset,
             posY: offset,
-            width: u * this.maxUX - offset * 2,
+            width: u * this.charUnitW - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           });
         }
@@ -4086,35 +4087,35 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 2) - offset,
-            posY: u * ((this.maxUY - 1) / 2 - 1),
+            posX: u * (this.charUnitW - 2) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 - 1),
             width: u,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
+            posX: u * (this.charUnitW - 1) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 1) / 2) - offset
+            height: u * ((this.charUnitH - 1) / 2) - offset
           });
         }
         if (this.char == "L") {
@@ -4123,13 +4124,13 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 1) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 1) - offset * 2,
             height: u
           });
         }
@@ -4139,34 +4140,34 @@ class RGAlphabet {
             posX: offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 1) - offset * 2
+            height: u * (this.charUnitH - 1) - offset * 2
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 1) - offset * 2
+            height: u * (this.charUnitH - 1) - offset * 2
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
+            posX: u * ((this.charUnitW - 1) / 2),
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2 + 1),
+            posX: u * ((this.charUnitW - 1) / 2 + 1),
             posY: offset,
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           });
         }
@@ -4176,34 +4177,34 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
+            posX: u * ((this.charUnitW - 1) / 2),
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2 + 1),
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posX: u * ((this.charUnitW - 1) / 2 + 1),
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           });
         }
@@ -4212,7 +4213,7 @@ class RGAlphabet {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
@@ -4220,21 +4221,21 @@ class RGAlphabet {
             posX: offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           });
         }
         if (this.char == "P") {
@@ -4243,28 +4244,28 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           });
         }
         if (this.char == "Q") {
@@ -4272,7 +4273,7 @@ class RGAlphabet {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
@@ -4280,40 +4281,40 @@ class RGAlphabet {
             posX: offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 3) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 3) - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 3) - offset * 2
+            height: u * (this.charUnitH - 3) - offset * 2
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 3) - offset,
-            posY: u * (this.maxUY - 3) - offset,
+            posX: u * (this.charUnitW - 3) - offset,
+            posY: u * (this.charUnitH - 3) - offset,
             width: u,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 2) - offset,
-            posY: u * (this.maxUY - 2) - offset,
+            posX: u * (this.charUnitW - 2) - offset,
+            posY: u * (this.charUnitH - 2) - offset,
             width: u,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
-            posY: u * (this.maxUY - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
+            posY: u * (this.charUnitH - 1) - offset,
             width: u,
             height: u
           });
@@ -4324,42 +4325,42 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 2) - offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
+            posX: u * (this.charUnitW - 2) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
             width: u,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
-            posY: u * ((this.maxUY - 1) / 2 + 2),
+            posX: u * (this.charUnitW - 1) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 + 2),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           });
         }
         if (this.char == "S") {
@@ -4367,21 +4368,21 @@ class RGAlphabet {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 1) - offset * 2,
+            width: u * (this.charUnitW - 1) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 1) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 1) - offset * 2,
             height: u
           },
           {
@@ -4389,29 +4390,29 @@ class RGAlphabet {
             posX: offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
+            posX: u * (this.charUnitW - 1) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           });
         }
         if (this.char == "T") {
           this.parts.push({
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
+            posX: u * ((this.charUnitW - 1) / 2),
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           },
           {
             type: "rect",
             posX: offset,
             posY: offset,
-            width: u * this.maxUX - offset * 2,
+            width: u * this.charUnitW - offset * 2,
             height: u
           });
         }
@@ -4421,21 +4422,21 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * (this.maxUY - 1) - offset * 2
+            height: u * (this.charUnitH - 1) - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: offset,
             width: u,
-            height: u * (this.maxUY - 1) - offset * 2
+            height: u * (this.charUnitH - 1) - offset * 2
           });
         }
         if (this.char == "V") {
@@ -4444,35 +4445,35 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 + 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 + 1) - offset
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 2) - offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
+            posX: u * (this.charUnitW - 2) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
             posX: u * 2 + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 4) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 4) - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 + 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 + 1) - offset
           });
         }
         if (this.char == "W") {
@@ -4481,34 +4482,34 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * (this.maxUY - 1) - offset * 2
+            height: u * (this.charUnitH - 1) - offset * 2
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: offset,
             width: u,
-            height: u * (this.maxUY - 1) - offset * 2
+            height: u * (this.charUnitH - 1) - offset * 2
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
+            posX: u * ((this.charUnitW - 1) / 2),
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2 + 1),
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posX: u * ((this.charUnitW - 1) / 2 + 1),
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           });
         }
@@ -4518,63 +4519,63 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2 - 1),
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 - 1),
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2 + 1),
-            posY: u * ((this.maxUY - 1) / 2 - 1),
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posX: u * ((this.charUnitW - 1) / 2 + 1),
+            posY: u * ((this.charUnitH - 1) / 2 - 1),
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
-            posY: u * ((this.maxUY - 1) / 2),
+            posX: u * ((this.charUnitW - 1) / 2),
+            posY: u * ((this.charUnitH - 1) / 2),
             width: u,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2 + 1),
-            posY: u * ((this.maxUY - 1) / 2 + 1),
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posX: u * ((this.charUnitW - 1) / 2 + 1),
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
             posX: offset,
-            posY: u * ((this.maxUY - 1) / 2 + 2),
+            posY: u * ((this.charUnitH - 1) / 2 + 2),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
-            posY: u * ((this.maxUY - 1) / 2 + 2),
+            posX: u * (this.charUnitW - 1) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 + 2),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           });
         }
         if (this.char == "Y") {
@@ -4583,35 +4584,35 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2 - 1),
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 - 1),
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2 + 1),
-            posY: u * ((this.maxUY - 1) / 2 - 1),
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posX: u * ((this.charUnitW - 1) / 2 + 1),
+            posY: u * ((this.charUnitH - 1) / 2 - 1),
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
-            posY: u * ((this.maxUY - 1) / 2),
+            posX: u * ((this.charUnitW - 1) / 2),
+            posY: u * ((this.charUnitH - 1) / 2),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 + 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 + 1) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           });
         }
         if (this.char == "Z") {
@@ -4619,36 +4620,36 @@ class RGAlphabet {
             type: "rect",
             posX: offset,
             posY: offset,
-            width: u * this.maxUX - offset * 2,
+            width: u * this.charUnitW - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * this.maxUX - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * this.charUnitW - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
             posX: offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           });
         }
         if (this.char == "0") {
@@ -4656,7 +4657,7 @@ class RGAlphabet {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
@@ -4664,26 +4665,26 @@ class RGAlphabet {
             posX: offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
-            posY: u * ((this.maxUY - 1) / 2),
+            posX: u * ((this.charUnitW - 1) / 2),
+            posY: u * ((this.charUnitH - 1) / 2),
             width: u,
             height: u
           });
@@ -4691,14 +4692,14 @@ class RGAlphabet {
         if (this.char == "1") {
           this.parts.push({
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
+            posX: u * ((this.charUnitW - 1) / 2),
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2 - 2) + offset,
+            posX: u * ((this.charUnitW - 1) / 2 - 2) + offset,
             posY: offset,
             width: u * 2,
             height: u
@@ -4706,8 +4707,8 @@ class RGAlphabet {
           {
             type: "rect",
             posX: offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * this.maxUX - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * this.charUnitW - offset * 2,
             height: u
           });
         }
@@ -4716,36 +4717,36 @@ class RGAlphabet {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * this.maxUX - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * this.charUnitW - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
             posX: offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           });
         }
         if (this.char == "3") {
@@ -4753,36 +4754,36 @@ class RGAlphabet {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 1) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 1) - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
+            posX: u * (this.charUnitW - 1) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           });
         }
         if (this.char == "4") {
@@ -4791,21 +4792,21 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 + 2) - offset
+            height: u * ((this.charUnitH - 1) / 2 + 2) - offset
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
-            width: u * (this.maxUX - 1) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
+            width: u * (this.charUnitW - 1) - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 2) - offset,
+            posX: u * (this.charUnitW - 2) - offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 1) - offset * 2
+            height: u * (this.charUnitH - 1) - offset * 2
           });
         }
         if (this.char == "5") {
@@ -4813,21 +4814,21 @@ class RGAlphabet {
             type: "rect",
             posX: offset,
             posY: offset,
-            width: u * (this.maxUX - 1) - offset * 2,
+            width: u * (this.charUnitW - 1) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 1) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 1) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 1) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 1) - offset * 2,
             height: u
           },
           {
@@ -4835,14 +4836,14 @@ class RGAlphabet {
             posX: offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
+            posX: u * (this.charUnitW - 1) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           });
         }
         if (this.char == "6") {
@@ -4850,21 +4851,21 @@ class RGAlphabet {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 1) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 1) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
@@ -4872,14 +4873,14 @@ class RGAlphabet {
             posX: offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
+            posX: u * (this.charUnitW - 1) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           });
         }
         if (this.char == "7") {
@@ -4887,29 +4888,29 @@ class RGAlphabet {
             type: "rect",
             posX: offset,
             posY: offset,
-            width: u * this.maxUX - offset * 2,
+            width: u * this.charUnitW - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 2) - offset,
-            posY: u * ((this.maxUY - 1) / 2),
+            posX: u * (this.charUnitW - 2) - offset,
+            posY: u * ((this.charUnitH - 1) / 2),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 + 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 + 1) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
             posX: offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           });
         }
         if (this.char == "8") {
@@ -4917,21 +4918,21 @@ class RGAlphabet {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
@@ -4939,28 +4940,28 @@ class RGAlphabet {
             posX: offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
             posX: offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
+            posX: u * (this.charUnitW - 1) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           });
         }
         if (this.char == "9") {
@@ -4968,21 +4969,21 @@ class RGAlphabet {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
@@ -4990,28 +4991,28 @@ class RGAlphabet {
             posX: offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           });
         }
         if (this.char == ",") {
           this.parts.push({
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 2) - offset,
+            posY: u * (this.charUnitH - 2) - offset,
             width: u * 2,
             height: u
           },
           {
             type: "rect",
             posX: u * 2 + offset,
-            posY: u * (this.maxUY - 1) - offset,
+            posY: u * (this.charUnitH - 1) - offset,
             width: u,
             height: u
           });
@@ -5020,7 +5021,7 @@ class RGAlphabet {
           this.parts.push({
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1.5) - offset,
+            posY: u * (this.charUnitH - 1.5) - offset,
             width: u * 1.5,
             height: u * 1.5
           });
@@ -5029,15 +5030,15 @@ class RGAlphabet {
           this.parts.push(
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
+            posX: u * ((this.charUnitW - 1) / 2),
             posY: offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2 - 0.25),
-            posY: u * (this.maxUY - 1) - offset,
+            posX: u * ((this.charUnitW - 1) / 2 - 0.25),
+            posY: u * (this.charUnitH - 1) - offset,
             width: u * 1.5,
             height: u * 1
           });
@@ -5047,7 +5048,7 @@ class RGAlphabet {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
@@ -5055,33 +5056,33 @@ class RGAlphabet {
             posX: offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset * 2
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset * 2
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2 + 1),
-            posY: u * ((this.maxUY - 1) / 2) - offset,
-            width: u * ((this.maxUX - 1) / 2 - 1) - offset,
+            posX: u * ((this.charUnitW - 1) / 2 + 1),
+            posY: u * ((this.charUnitH - 1) / 2) - offset,
+            width: u * ((this.charUnitW - 1) / 2 - 1) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
-            posY: u * ((this.maxUY - 1) / 2 + 0.5),
+            posX: u * ((this.charUnitW - 1) / 2),
+            posY: u * ((this.charUnitH - 1) / 2 + 0.5),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1.25) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1.25) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset * 2
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset * 2
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2 - 0.25),
-            posY: u * (this.maxUY - 1) - offset,
+            posX: u * ((this.charUnitW - 1) / 2 - 0.25),
+            posY: u * (this.charUnitH - 1) - offset,
             width: u * 1.5,
             height: u
           });
@@ -5090,14 +5091,14 @@ class RGAlphabet {
           this.parts.push({
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2 - 1.5),
+            posY: u * ((this.charUnitH - 1) / 2 - 1.5),
             width: u * 1.5,
             height: u * 1.5
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1) + offset,
+            posY: u * ((this.charUnitH - 1) / 2 + 1) + offset,
             width: u * 1.5,
             height: u * 1.5
           });
@@ -5106,21 +5107,21 @@ class RGAlphabet {
           this.parts.push({
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2 - 1.5),
+            posY: u * ((this.charUnitH - 1) / 2 - 1.5),
             width: u * 1.5,
             height: u * 1.5
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 2) - offset,
+            posY: u * (this.charUnitH - 2) - offset,
             width: u * 2,
             height: u
           },
           {
             type: "rect",
             posX: u * 2 + offset,
-            posY: u * (this.maxUY - 1) - offset,
+            posY: u * (this.charUnitH - 1) - offset,
             width: u,
             height: u
           });
@@ -5129,8 +5130,8 @@ class RGAlphabet {
           this.parts.push({
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           });
         }
@@ -5138,31 +5139,31 @@ class RGAlphabet {
           this.parts.push({
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
+            posX: u * ((this.charUnitW - 1) / 2),
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           });
         }
         if (this.char == "=") {
           this.parts.push({
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2 - 1),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2 - 1),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           });
         }
@@ -5171,74 +5172,74 @@ class RGAlphabet {
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2 - 1),
-            width: u * ((this.maxUX - 2) / 3) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 - 1),
+            width: u * ((this.charUnitW - 2) / 3) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) - ((this.maxUX - 2) / 3)),
-            posY: u * ((this.maxUY - 1) / 2 - 1),
-            width: u * ((this.maxUX - 2) / 3) - offset,
+            posX: u * ((this.charUnitW - 1) - ((this.charUnitW - 2) / 3)),
+            posY: u * ((this.charUnitH - 1) / 2 - 1),
+            width: u * ((this.charUnitW - 2) / 3) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 2) / 3 + 1),
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * ((this.maxUX - 2) / 3),
+            posX: u * ((this.charUnitW - 2) / 3 + 1),
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * ((this.charUnitW - 2) / 3),
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
-            width: u * ((this.maxUX - 2) / 3) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
+            width: u * ((this.charUnitW - 2) / 3) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) - ((this.maxUX - 2) / 3)),
-            posY: u * ((this.maxUY - 1) / 2 + 1),
-            width: u * ((this.maxUX - 2) / 3) - offset,
+            posX: u * ((this.charUnitW - 1) - ((this.charUnitW - 2) / 3)),
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
+            width: u * ((this.charUnitW - 2) / 3) - offset,
             height: u
           });
         }
         if (this.char == "/") {
           this.parts.push({
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: offset,
             width: u,
-            height: u * ((this.maxUY - 2) / 3) - offset
+            height: u * ((this.charUnitH - 2) / 3) - offset
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2 + 1),
-            posY: u * ((this.maxUY - 2) / 3),
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posX: u * ((this.charUnitW - 1) / 2 + 1),
+            posY: u * ((this.charUnitH - 2) / 3),
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
-            posY: u * ((this.maxUY - 2) / 3 + 1),
+            posX: u * ((this.charUnitW - 1) / 2),
+            posY: u * ((this.charUnitH - 2) / 3 + 1),
             width: u,
-            height: u * ((this.maxUY - 2) / 3)
+            height: u * ((this.charUnitH - 2) / 3)
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) - ((this.maxUY - 2) / 3)),
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posY: u * ((this.charUnitH - 1) - ((this.charUnitH - 2) / 3)),
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
             posX: offset,
-            posY: u * ((this.maxUY) - (this.maxUY - 2) / 3),
+            posY: u * ((this.charUnitH) - (this.charUnitH - 2) / 3),
             width: u,
-            height: u * ((this.maxUY - 2) / 3) - offset
+            height: u * ((this.charUnitH - 2) / 3) - offset
           });
         }
         if (this.char == "\\") {
@@ -5247,64 +5248,64 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * ((this.maxUY - 2) / 3) - offset
+            height: u * ((this.charUnitH - 2) / 3) - offset
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 2) / 3),
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posY: u * ((this.charUnitH - 2) / 3),
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
-            posY: u * ((this.maxUY - 2) / 3 + 1),
+            posX: u * ((this.charUnitW - 1) / 2),
+            posY: u * ((this.charUnitH - 2) / 3 + 1),
             width: u,
-            height: u * ((this.maxUY - 2) / 3)
+            height: u * ((this.charUnitH - 2) / 3)
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2 + 1),
-            posY: u * ((this.maxUY - 1) - ((this.maxUY - 2) / 3)),
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posX: u * ((this.charUnitW - 1) / 2 + 1),
+            posY: u * ((this.charUnitH - 1) - ((this.charUnitH - 2) / 3)),
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
-            posY: u * ((this.maxUY) - (this.maxUY - 2) / 3),
+            posX: u * (this.charUnitW - 1) - offset,
+            posY: u * ((this.charUnitH) - (this.charUnitH - 2) / 3),
             width: u,
-            height: u * ((this.maxUY - 2) / 3) - offset
+            height: u * ((this.charUnitH - 2) / 3) - offset
           });
         }
         if (this.char == "#") {
           this.parts.push({
             type: "rect",
-            posX: u * ((this.maxUX - 2) / 3) + offset,
+            posX: u * ((this.charUnitW - 2) / 3) + offset,
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 0.75) - (this.maxUX - 2) / 3) - offset,
+            posX: u * ((this.charUnitW - 0.75) - (this.charUnitW - 2) / 3) - offset,
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           },
           {
             type: "rect",
             posX: u * 0.5 + offset,
-            posY: u * ((this.maxUY - 2) / 3) + offset,
-            width: u * (this.maxUX - 0.75) - offset * 2,
+            posY: u * ((this.charUnitH - 2) / 3) + offset,
+            width: u * (this.charUnitW - 0.75) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u * 0.5 + offset,
-            posY: u * (this.maxUY - 1 - (this.maxUY - 2) / 3) - offset,
-            width: u * (this.maxUX - 0.75) - offset * 2,
+            posY: u * (this.charUnitH - 1 - (this.charUnitH - 2) / 3) - offset,
+            width: u * (this.charUnitW - 0.75) - offset * 2,
             height: u
           });
         }
@@ -5313,21 +5314,21 @@ class RGAlphabet {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
@@ -5335,21 +5336,21 @@ class RGAlphabet {
             posX: offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
+            posX: u * (this.charUnitW - 1) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
+            posX: u * ((this.charUnitW - 1) / 2),
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           });
         }
         if (this.char == "¥") {
@@ -5358,41 +5359,41 @@ class RGAlphabet {
             posX: offset,
             posY: offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2 - 1),
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 - 1),
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2 + 1),
-            posY: u * ((this.maxUY - 1) / 2 - 1),
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posX: u * ((this.charUnitW - 1) / 2 + 1),
+            posY: u * ((this.charUnitH - 1) / 2 - 1),
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
-            posY: u * ((this.maxUY - 1) / 2),
+            posX: u * ((this.charUnitW - 1) / 2),
+            posY: u * ((this.charUnitH - 1) / 2),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 + 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 + 1) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1) + offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2 + 1) + offset,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           });
         }
@@ -5401,7 +5402,7 @@ class RGAlphabet {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 2) - offset * 2,
+            width: u * (this.charUnitW - 2) - offset * 2,
             height: u
           },
           {
@@ -5409,27 +5410,27 @@ class RGAlphabet {
             posX: offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           },
           {
             type: "rect",
             posX: u * 3 + offset,
             posY: u * 2 + offset,
-            width: u * (this.maxUX - 4),
+            width: u * (this.charUnitW - 4),
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           },
           {
             type: "rect",
             posX: u * 2 + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 3) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 3) - offset * 2,
             height: u
           },
           {
@@ -5437,7 +5438,7 @@ class RGAlphabet {
             posX: u * 2 + offset,
             posY: u * 3 + offset,
             width: u,
-            height: u * (this.maxUY - 3) - offset * 2
+            height: u * (this.charUnitH - 3) - offset * 2
           });
         }
         if (this.char == "%") {
@@ -5445,14 +5446,14 @@ class RGAlphabet {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 2) / 3 + 1),
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posY: u * ((this.charUnitH - 2) / 3 + 1),
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
@@ -5460,79 +5461,79 @@ class RGAlphabet {
             posX: offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 2) / 3) - offset
+            height: u * ((this.charUnitH - 2) / 3) - offset
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 3) / 2 + 1),
+            posX: u * ((this.charUnitW - 3) / 2 + 1),
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 2) / 3) - offset
+            height: u * ((this.charUnitH - 2) / 3) - offset
           },
 
           {
             type: "rect",
-            posX: u * ((this.maxUX - 3) / 2 + 2),
-            posY: u * ((this.maxUY - 2) / 3 * 2),
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posX: u * ((this.charUnitW - 3) / 2 + 2),
+            posY: u * ((this.charUnitH - 2) / 3 * 2),
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 3) / 2 + 2),
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posX: u * ((this.charUnitW - 3) / 2 + 2),
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
-            posY: u * ((this.maxUY - 2) / 3 * 2 + 1),
+            posX: u * (this.charUnitW - 1) - offset,
+            posY: u * ((this.charUnitH - 2) / 3 * 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 2) / 3) - offset
+            height: u * ((this.charUnitH - 2) / 3) - offset
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 3) / 2 + 1),
-            posY: u * ((this.maxUY - 2) / 3 * 2 + 1),
+            posX: u * ((this.charUnitW - 3) / 2 + 1),
+            posY: u * ((this.charUnitH - 2) / 3 * 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 2) / 3) - offset
+            height: u * ((this.charUnitH - 2) / 3) - offset
           },
 
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: offset,
             width: u,
-            height: u * ((this.maxUY - 2) / 3) - offset
+            height: u * ((this.charUnitH - 2) / 3) - offset
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2 + 1),
-            posY: u * ((this.maxUY - 2) / 3),
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posX: u * ((this.charUnitW - 1) / 2 + 1),
+            posY: u * ((this.charUnitH - 2) / 3),
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
-            posY: u * ((this.maxUY - 2) / 3 + 1),
+            posX: u * ((this.charUnitW - 1) / 2),
+            posY: u * ((this.charUnitH - 2) / 3 + 1),
             width: u,
-            height: u * ((this.maxUY - 2) / 3)
+            height: u * ((this.charUnitH - 2) / 3)
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) - ((this.maxUY - 2) / 3)),
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posY: u * ((this.charUnitH - 1) - ((this.charUnitH - 2) / 3)),
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
             posX: offset,
-            posY: u * ((this.maxUY) - (this.maxUY - 2) / 3),
+            posY: u * ((this.charUnitH) - (this.charUnitH - 2) / 3),
             width: u,
-            height: u * ((this.maxUY - 2) / 3) - offset
+            height: u * ((this.charUnitH - 2) / 3) - offset
           });
         }
         if (this.char == "&") {
@@ -5540,21 +5541,21 @@ class RGAlphabet {
             type: "rect",
             posX: u + offset,
             posY: offset,
-            width: u * (this.maxUX - 4) - offset * 2,
+            width: u * (this.charUnitW - 4) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * ((this.maxUY - 1) / 2),
-            width: u * (this.maxUX - 3) - offset * 2,
+            posY: u * ((this.charUnitH - 1) / 2),
+            width: u * (this.charUnitW - 3) - offset * 2,
             height: u
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
-            width: u * (this.maxUX - 3) - offset * 2,
+            posY: u * (this.charUnitH - 1) - offset,
+            width: u * (this.charUnitW - 3) - offset * 2,
             height: u
           },
           {
@@ -5562,40 +5563,40 @@ class RGAlphabet {
             posX: offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
             posX: offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
-            posY: u * ((this.maxUY - 1) / 2),
+            posX: u * (this.charUnitW - 1) - offset,
+            posY: u * ((this.charUnitH - 1) / 2),
             width: u,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 3) - offset,
+            posX: u * (this.charUnitW - 3) - offset,
             posY: u + offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 2) - offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
+            posX: u * (this.charUnitW - 2) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 1) / 2 - 1) - offset
+            height: u * ((this.charUnitH - 1) / 2 - 1) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
-            posY: u * (this.maxUY - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
+            posY: u * (this.charUnitH - 1) - offset,
             width: u,
             height: u
           });
@@ -5603,24 +5604,24 @@ class RGAlphabet {
         if (this.char == "(") {
           this.parts.push({
             type: "rect",
-            posX: u * (this.maxUX - 2) - offset,
+            posX: u * (this.charUnitW - 2) - offset,
             posY: offset,
             width: u,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 2) - offset,
-            posY: u * (this.maxUY - 1) - offset,
+            posX: u * (this.charUnitW - 2) - offset,
+            posY: u * (this.charUnitH - 1) - offset,
             width: u,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 3) - offset,
+            posX: u * (this.charUnitW - 3) - offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           });
         }
         if (this.char == ")") {
@@ -5634,7 +5635,7 @@ class RGAlphabet {
           {
             type: "rect",
             posX: u * 2 + offset,
-            posY: u * (this.maxUY - 1) - offset,
+            posY: u * (this.charUnitH - 1) - offset,
             width: u,
             height: u
           },
@@ -5643,30 +5644,30 @@ class RGAlphabet {
             posX: u * 3 + offset,
             posY: u + offset,
             width: u,
-            height: u * (this.maxUY - 2) - offset * 2
+            height: u * (this.charUnitH - 2) - offset * 2
           });
         }
         if (this.char == "[") {
           this.parts.push({
             type: "rect",
-            posX: u * (this.maxUX - 3) - offset,
+            posX: u * (this.charUnitW - 3) - offset,
             posY: offset,
             width: u * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 3) - offset,
-            posY: u * (this.maxUY - 1) - offset,
+            posX: u * (this.charUnitW - 3) - offset,
+            posY: u * (this.charUnitH - 1) - offset,
             width: u * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 3) - offset,
+            posX: u * (this.charUnitW - 3) - offset,
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           });
         }
         if (this.char == "]") {
@@ -5680,7 +5681,7 @@ class RGAlphabet {
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
+            posY: u * (this.charUnitH - 1) - offset,
             width: u * 2,
             height: u
           },
@@ -5689,44 +5690,44 @@ class RGAlphabet {
             posX: u * 2 + offset,
             posY: offset,
             width: u,
-            height: u * this.maxUY - offset * 2
+            height: u * this.charUnitH - offset * 2
           });
         }
         if (this.char == "<") {
           this.parts.push({
             type: "rect",
-            posX: u * (this.maxUX - 2) - offset,
+            posX: u * (this.charUnitW - 2) - offset,
             posY: offset,
             width: u,
-            height: u * (this.maxUY / 5)
+            height: u * (this.charUnitH / 5)
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 2) - offset,
-            posY: u * (this.maxUY / 5 * 4) - offset,
+            posX: u * (this.charUnitW - 2) - offset,
+            posY: u * (this.charUnitH / 5 * 4) - offset,
             width: u,
-            height: u * (this.maxUY / 5)
+            height: u * (this.charUnitH / 5)
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 3) - offset,
-            posY: u * (this.maxUY / 5),
+            posX: u * (this.charUnitW - 3) - offset,
+            posY: u * (this.charUnitH / 5),
             width: u,
-            height: u * (this.maxUY / 5)
+            height: u * (this.charUnitH / 5)
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 3) - offset,
-            posY: u * (this.maxUY / 5 * 3),
+            posX: u * (this.charUnitW - 3) - offset,
+            posY: u * (this.charUnitH / 5 * 3),
             width: u,
-            height: u * (this.maxUY / 5)
+            height: u * (this.charUnitH / 5)
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 4) - offset,
-            posY: u * (this.maxUY / 5 * 2),
+            posX: u * (this.charUnitW - 4) - offset,
+            posY: u * (this.charUnitH / 5 * 2),
             width: u,
-            height: u * (this.maxUY / 5)
+            height: u * (this.charUnitH / 5)
           });
         }
         if (this.char == ">") {
@@ -5735,70 +5736,70 @@ class RGAlphabet {
             posX: u + offset,
             posY: offset,
             width: u,
-            height: u * (this.maxUY / 5)
+            height: u * (this.charUnitH / 5)
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY / 5 * 4) - offset,
+            posY: u * (this.charUnitH / 5 * 4) - offset,
             width: u,
-            height: u * (this.maxUY / 5)
+            height: u * (this.charUnitH / 5)
           },
           {
             type: "rect",
             posX: u * 2 + offset,
-            posY: u * (this.maxUY / 5),
+            posY: u * (this.charUnitH / 5),
             width: u,
-            height: u * (this.maxUY / 5)
+            height: u * (this.charUnitH / 5)
           },
           {
             type: "rect",
             posX: u * 2 + offset,
-            posY: u * (this.maxUY / 5 * 3),
+            posY: u * (this.charUnitH / 5 * 3),
             width: u,
-            height: u * (this.maxUY / 5)
+            height: u * (this.charUnitH / 5)
           },
           {
             type: "rect",
             posX: u * 3 + offset,
-            posY: u * (this.maxUY / 5 * 2),
+            posY: u * (this.charUnitH / 5 * 2),
             width: u,
-            height: u * (this.maxUY / 5)
+            height: u * (this.charUnitH / 5)
           });
         }
         if (this.char == "{") {
           this.parts.push({
             type: "rect",
-            posX: u * (this.maxUX - 3) - offset,
+            posX: u * (this.charUnitW - 3) - offset,
             posY: offset,
             width: u * 2,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 3) - offset,
+            posX: u * (this.charUnitW - 3) - offset,
             posY: offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2) - offset
+            height: u * ((this.charUnitH - 1) / 2) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 4) - offset,
-            posY: u * ((this.maxUY - 1) / 2),
+            posX: u * (this.charUnitW - 4) - offset,
+            posY: u * ((this.charUnitH - 1) / 2),
             width: u,
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 3) - offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
+            posX: u * (this.charUnitW - 3) - offset,
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 1) / 2) - offset
+            height: u * ((this.charUnitH - 1) / 2) - offset
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 3) - offset,
-            posY: u * (this.maxUY - 1) - offset,
+            posX: u * (this.charUnitW - 3) - offset,
+            posY: u * (this.charUnitH - 1) - offset,
             width: u * 2,
             height: u
           });
@@ -5816,26 +5817,26 @@ class RGAlphabet {
             posX: u * 2 + offset,
             posY: offset,
             width: u,
-            height: u * ((this.maxUY - 1) / 2) - offset
+            height: u * ((this.charUnitH - 1) / 2) - offset
           },
           {
             type: "rect",
             posX: u * 3 + offset,
-            posY: u * ((this.maxUY - 1) / 2),
+            posY: u * ((this.charUnitH - 1) / 2),
             width: u,
             height: u
           },
           {
             type: "rect",
             posX: u * 2 + offset,
-            posY: u * ((this.maxUY - 1) / 2 + 1),
+            posY: u * ((this.charUnitH - 1) / 2 + 1),
             width: u,
-            height: u * ((this.maxUY - 1) / 2) - offset
+            height: u * ((this.charUnitH - 1) / 2) - offset
           },
           {
             type: "rect",
             posX: u + offset,
-            posY: u * (this.maxUY - 1) - offset,
+            posY: u * (this.charUnitH - 1) - offset,
             width: u * 2,
             height: u
           });
@@ -5845,35 +5846,35 @@ class RGAlphabet {
             type: "rect",
             posX: offset,
             posY: u * 2 + offset,
-            width: u * (this.maxUX / 5),
+            width: u * (this.charUnitW / 5),
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX / 5),
+            posX: u * (this.charUnitW / 5),
             posY: u + offset,
-            width: u * (this.maxUX / 5),
+            width: u * (this.charUnitW / 5),
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX / 5 * 2),
+            posX: u * (this.charUnitW / 5 * 2),
             posY: offset,
-            width: u * (this.maxUX / 5),
+            width: u * (this.charUnitW / 5),
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX / 5 * 3),
+            posX: u * (this.charUnitW / 5 * 3),
             posY: u + offset,
-            width: u * (this.maxUX / 5),
+            width: u * (this.charUnitW / 5),
             height: u
           },
           {
             type: "rect",
-            posX: u * (this.maxUX / 5 * 4) - offset,
+            posX: u * (this.charUnitW / 5 * 4) - offset,
             posY: u * 2 + offset,
-            width: u * (this.maxUX / 5),
+            width: u * (this.charUnitW / 5),
             height: u
           });
         }
@@ -5883,76 +5884,76 @@ class RGAlphabet {
             posX: offset,
             posY: u * 2 + offset,
             width: u,
-            height: u * (this.maxUY - 5)
+            height: u * (this.charUnitH - 5)
           },
           {
             type: "rect",
             posX: u + offset,
             posY: u + offset,
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
+            posX: u * ((this.charUnitW - 1) / 2),
             posY: u * 2 + offset,
             width: u,
-            height: u * (this.maxUY - 4) - offset * 2
+            height: u * (this.charUnitH - 4) - offset * 2
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - 1) - offset,
+            posX: u * (this.charUnitW - 1) - offset,
             posY: u * 3 + offset,
             width: u,
-            height: u * (this.maxUY - 5)
+            height: u * (this.charUnitH - 5)
           },
           {
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2 + 1),
-            posY: u * (this.maxUY - 2) - offset,
-            width: u * ((this.maxUX - 3) / 2) - offset,
+            posX: u * ((this.charUnitW - 1) / 2 + 1),
+            posY: u * (this.charUnitH - 2) - offset,
+            width: u * ((this.charUnitW - 3) / 2) - offset,
             height: u
           });
         }
         if (this.char == "\"") {
           this.parts.push({
             type: "rect",
-            posX: u * ((this.maxUX - 3) / 2),
+            posX: u * ((this.charUnitW - 3) / 2),
             posY: offset,
             width: u,
-            height: u * (this.maxUY / 5 * 2)
+            height: u * (this.charUnitH / 5 * 2)
           },
           {
             type: "rect",
-            posX: u * (this.maxUX - ((this.maxUX - 3) / 2) - 1),
+            posX: u * (this.charUnitW - ((this.charUnitW - 3) / 2) - 1),
             posY: offset,
             width: u,
-            height: u * (this.maxUY / 5 * 2)
+            height: u * (this.charUnitH / 5 * 2)
           });
         }
         if (this.char == "\'") {
           this.parts.push({
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
+            posX: u * ((this.charUnitW - 1) / 2),
             posY: offset,
             width: u,
-            height: u * (this.maxUY / 5 * 2)
+            height: u * (this.charUnitH / 5 * 2)
           });
         }
         if (this.char == "|") {
           this.parts.push({
             type: "rect",
-            posX: u * ((this.maxUX - 1) / 2),
+            posX: u * ((this.charUnitW - 1) / 2),
             posY: offset,
             width: u,
-            height: u * (this.maxUY) - offset * 2
+            height: u * (this.charUnitH) - offset * 2
           });
         }
         if (this.char == "寅") {
           this.parts.push(
             {
               type: "rect",
-              posX: u * ((this.maxUX - 1) / 2),
+              posX: u * ((this.charUnitW - 1) / 2),
               posY: offset,
               width: u,
               height: u
@@ -5961,7 +5962,7 @@ class RGAlphabet {
               type: "rect",
               posX: offset,
               posY: u + offset,
-              width: u * this.maxUX - offset * 2,
+              width: u * this.charUnitW - offset * 2,
               height: u
             },
             {
@@ -5973,7 +5974,7 @@ class RGAlphabet {
             },
             {
               type: "rect",
-              posX: u * (this.maxUX - 1) - offset,
+              posX: u * (this.charUnitW - 1) - offset,
               posY: u * 2 + offset,
               width: u,
               height: u
@@ -5982,28 +5983,28 @@ class RGAlphabet {
               type: "rect",
               posX: u * 2 + offset,
               posY: u * 3 + offset,
-              width: u * (this.maxUX - 4) - offset * 2,
+              width: u * (this.charUnitW - 4) - offset * 2,
               height: u
             },
             {
               type: "rect",
               posX: u + offset,
               posY: u * 5 + offset,
-              width: u * (this.maxUX - 2) - offset * 2,
+              width: u * (this.charUnitW - 2) - offset * 2,
               height: u
             },
             {
               type: "rect",
               posX: u + offset,
-              posY: u * 5 + u * ((this.maxUY - 8) / 2),
-              width: u * (this.maxUX - 2) - offset * 2,
+              posY: u * 5 + u * ((this.charUnitH - 8) / 2),
+              width: u * (this.charUnitW - 2) - offset * 2,
               height: u
             },
             {
               type: "rect",
               posX: u + offset,
-              posY: u * (this.maxUY - 3) - offset,
-              width: u * (this.maxUX - 2) - offset * 2,
+              posY: u * (this.charUnitH - 3) - offset,
+              width: u * (this.charUnitW - 2) - offset * 2,
               height: u
             },
             {
@@ -6011,47 +6012,47 @@ class RGAlphabet {
               posX: u + offset,
               posY: u * 5 + offset,
               width: u,
-              height: u * (this.maxUY - 8) - offset * 2
+              height: u * (this.charUnitH - 8) - offset * 2
             },
             {
               type: "rect",
-              posX: u * ((this.maxUX - 1) / 2),
+              posX: u * ((this.charUnitW - 1) / 2),
               posY: u * 4 + offset,
               width: u,
-              height: u * (this.maxUY - 7) - offset * 2
+              height: u * (this.charUnitH - 7) - offset * 2
             },
             {
               type: "rect",
-              posX: u * (this.maxUX - 2) - offset,
+              posX: u * (this.charUnitW - 2) - offset,
               posY: u * 5 + offset,
               width: u,
-              height: u * (this.maxUY - 8) - offset * 2
+              height: u * (this.charUnitH - 8) - offset * 2
             },
             {
               type: "rect",
               posX: u * 2 + offset,
-              posY: u * (this.maxUY - 2) - offset,
+              posY: u * (this.charUnitH - 2) - offset,
               width: u,
               height: u
             },
             {
               type: "rect",
               posX: u + offset,
-              posY: u * (this.maxUY - 1) - offset,
+              posY: u * (this.charUnitH - 1) - offset,
               width: u,
               height: u
             },
             {
               type: "rect",
-              posX: u * (this.maxUX - 3) - offset,
-              posY: u * (this.maxUY - 2) - offset,
+              posX: u * (this.charUnitW - 3) - offset,
+              posY: u * (this.charUnitH - 2) - offset,
               width: u,
               height: u
             },
             {
               type: "rect",
-              posX: u * (this.maxUX - 2) - offset,
-              posY: u * (this.maxUY - 1) - offset,
+              posX: u * (this.charUnitW - 2) - offset,
+              posY: u * (this.charUnitH - 1) - offset,
               width: u,
               height: u
             }
@@ -6064,14 +6065,14 @@ class RGAlphabet {
               type: "rect",
               posX: u + offset,
               posY: offset,
-              width: u * ((this.maxUX - 4) / 3),
+              width: u * ((this.charUnitW - 4) / 3),
               height: u
             },
             {
               type: "rect",
-              posX: u * (this.maxUX - ((this.maxUX - 4) / 3) - 1) - offset,
+              posX: u * (this.charUnitW - ((this.charUnitW - 4) / 3) - 1) - offset,
               posY: offset,
-              width: u * ((this.maxUX - 4) / 3),
+              width: u * ((this.charUnitW - 4) / 3),
               height: u
             },
             {
@@ -6083,21 +6084,21 @@ class RGAlphabet {
             },
             {
               type: "rect",
-              posX: u * (this.maxUX - 1) - offset,
+              posX: u * (this.charUnitW - 1) - offset,
               posY: u + offset,
               width: u,
               height: u * 3
             },
             {
               type: "rect",
-              posX: u * ((this.maxUX - 4) / 3 + 1) + offset,
+              posX: u * ((this.charUnitW - 4) / 3 + 1) + offset,
               posY: u + offset,
               width: u,
               height: u
             },
             {
               type: "rect",
-              posX: u * (this.maxUX - ((this.maxUX - 4) / 3) - 2) - offset,
+              posX: u * (this.charUnitW - ((this.charUnitW - 4) / 3) - 2) - offset,
               posY: u + offset,
               width: u,
               height: u
@@ -6106,21 +6107,21 @@ class RGAlphabet {
               type: "rect",
               posX: u * 2 + offset,
               posY: u * 2 + offset,
-              width: u * ((this.maxUX - 4) / 3 - 2),
+              width: u * ((this.charUnitW - 4) / 3 - 2),
               height: u
             },
             {
               type: "rect",
-              posX: u * ((this.maxUX - 4) / 3 + 1) + offset,
+              posX: u * ((this.charUnitW - 4) / 3 + 1) + offset,
               posY: u * 2 + offset,
-              width: u * ((this.maxUX - 4) / 3 + 2) - offset * 2,
+              width: u * ((this.charUnitW - 4) / 3 + 2) - offset * 2,
               height: u
             },
             {
               type: "rect",
-              posX: u * (this.maxUX - ((this.maxUX - 4) / 3)) - offset,
+              posX: u * (this.charUnitW - ((this.charUnitW - 4) / 3)) - offset,
               posY: u * 2 + offset,
-              width: u * ((this.maxUX - 4) / 3 - 2),
+              width: u * ((this.charUnitW - 4) / 3 - 2),
               height: u
             },
             {
@@ -6132,7 +6133,7 @@ class RGAlphabet {
             },
             {
               type: "rect",
-              posX: u * (this.maxUX - 2) - offset,
+              posX: u * (this.charUnitW - 2) - offset,
               posY: u * 3 + offset,
               width: u,
               height: u
@@ -6140,14 +6141,14 @@ class RGAlphabet {
             // 額
             {
               type: "rect",
-              posX: u * ((this.maxUX - 1) / 2),
+              posX: u * ((this.charUnitW - 1) / 2),
               posY: u * 3 + offset,
               width: u,
               height: u * 3
             },
             {
               type: "rect",
-              posX: u * ((this.maxUX - 1) / 2 - 1),
+              posX: u * ((this.charUnitW - 1) / 2 - 1),
               posY: u * 4 + offset,
               width: u * 3,
               height: u
@@ -6158,7 +6159,7 @@ class RGAlphabet {
               posX: offset,
               posY: u * 4 + offset,
               width: u,
-              height: u * (this.maxUY - 8) - offset * 2
+              height: u * (this.charUnitH - 8) - offset * 2
             },
             {
               type: "rect",
@@ -6170,144 +6171,144 @@ class RGAlphabet {
             {
               type: "rect",
               posX: u + offset,
-              posY: u * (this.maxUY - 5) - offset,
+              posY: u * (this.charUnitH - 5) - offset,
               width: u * 2,
               height: u
             },
             {
               type: "rect",
               posX: u + offset,
-              posY: u * (this.maxUY - 4) - offset,
+              posY: u * (this.charUnitH - 4) - offset,
               width: u,
               height: u
             },
             {
               type: "rect",
               posX: u * 3 + offset,
-              posY: u * (this.maxUY - 4) - offset,
+              posY: u * (this.charUnitH - 4) - offset,
               width: u,
               height: u
             },
             {
               type: "rect",
               posX: u * 2 + offset,
-              posY: u * (this.maxUY - 3) - offset,
+              posY: u * (this.charUnitH - 3) - offset,
               width: u,
               height: u
             },
             {
               type: "rect",
               posX: u + offset,
-              posY: u * (this.maxUY - 2) - offset,
+              posY: u * (this.charUnitH - 2) - offset,
               width: u,
               height: u
             },
             {
               type: "rect",
               posX: u * 3 + offset,
-              posY: u * (this.maxUY - 2) - offset,
+              posY: u * (this.charUnitH - 2) - offset,
               width: u * 2,
               height: u
             },
             // 右頬
             {
               type: "rect",
-              posX: u * (this.maxUX - 1) - offset,
+              posX: u * (this.charUnitW - 1) - offset,
               posY: u * 4 + offset,
               width: u,
-              height: u * (this.maxUY - 8) - offset * 2
+              height: u * (this.charUnitH - 8) - offset * 2
             },
             {
               type: "rect",
-              posX: u * (this.maxUX - 2) - offset,
+              posX: u * (this.charUnitW - 2) - offset,
               posY: u * 5 + offset,
               width: u,
               height: u
             },
             {
               type: "rect",
-              posX: u * (this.maxUX - 3) - offset,
-              posY: u * (this.maxUY - 5) - offset,
+              posX: u * (this.charUnitW - 3) - offset,
+              posY: u * (this.charUnitH - 5) - offset,
               width: u * 2,
               height: u
             },
             {
               type: "rect",
-              posX: u * (this.maxUX - 2) - offset,
-              posY: u * (this.maxUY - 4) - offset,
+              posX: u * (this.charUnitW - 2) - offset,
+              posY: u * (this.charUnitH - 4) - offset,
               width: u,
               height: u
             },
             {
               type: "rect",
-              posX: u * (this.maxUX - 4) - offset,
-              posY: u * (this.maxUY - 4) - offset,
+              posX: u * (this.charUnitW - 4) - offset,
+              posY: u * (this.charUnitH - 4) - offset,
               width: u,
               height: u
             },
             {
               type: "rect",
-              posX: u * (this.maxUX - 3) - offset,
-              posY: u * (this.maxUY - 3) - offset,
+              posX: u * (this.charUnitW - 3) - offset,
+              posY: u * (this.charUnitH - 3) - offset,
               width: u,
               height: u
             },
             {
               type: "rect",
-              posX: u * (this.maxUX - 2) - offset,
-              posY: u * (this.maxUY - 2) - offset,
+              posX: u * (this.charUnitW - 2) - offset,
+              posY: u * (this.charUnitH - 2) - offset,
               width: u,
               height: u
             },
             {
               type: "rect",
-              posX: u * (this.maxUX - 5) - offset,
-              posY: u * (this.maxUY - 2) - offset,
+              posX: u * (this.charUnitW - 5) - offset,
+              posY: u * (this.charUnitH - 2) - offset,
               width: u * 2,
               height: u
             },
             // 鼻
             {
               type: "rect",
-              posX: u * ((this.maxUX - 1) / 2 - 1),
-              posY: u * (this.maxUY - 6) - offset,
+              posX: u * ((this.charUnitW - 1) / 2 - 1),
+              posY: u * (this.charUnitH - 6) - offset,
               width: u,
               height: u
             },
             {
               type: "rect",
-              posX: u * ((this.maxUX - 1) / 2 + 1),
-              posY: u * (this.maxUY - 6) - offset,
+              posX: u * ((this.charUnitW - 1) / 2 + 1),
+              posY: u * (this.charUnitH - 6) - offset,
               width: u,
               height: u
             },
             {
               type: "rect",
-              posX: u * ((this.maxUX - 1) / 2 - 1),
-              posY: u * (this.maxUY - 5) - offset,
+              posX: u * ((this.charUnitW - 1) / 2 - 1),
+              posY: u * (this.charUnitH - 5) - offset,
               width: u * 3,
               height: u
             },
             // 口、顎
             {
               type: "rect",
-              posX: u * ((this.maxUX - 1) / 2),
-              posY: u * (this.maxUY - 4) - offset,
+              posX: u * ((this.charUnitW - 1) / 2),
+              posY: u * (this.charUnitH - 4) - offset,
               width: u,
               height: u
             },
             {
               type: "rect",
               posX: u * 4 + offset,
-              posY: u * (this.maxUY - 3) - offset,
-              width: u * (this.maxUX - 8) - offset * 2,
+              posY: u * (this.charUnitH - 3) - offset,
+              width: u * (this.charUnitW - 8) - offset * 2,
               height: u
             },
             {
               type: "rect",
               posX: u * 4 + offset,
-              posY: u * (this.maxUY - 1) - offset,
-              width: u * (this.maxUX - 8) - offset * 2,
+              posY: u * (this.charUnitH - 1) - offset,
+              width: u * (this.charUnitW - 8) - offset * 2,
               height: u
             },
             // 左目
@@ -6315,7 +6316,7 @@ class RGAlphabet {
               type: "rect",
               posX: u * 3 + offset,
               posY: u * 5 + offset,
-              width: u * ((this.maxUX - 11) / 2) - offset,
+              width: u * ((this.charUnitW - 11) / 2) - offset,
               height: u
             },
             {
@@ -6323,49 +6324,49 @@ class RGAlphabet {
               posX: u * 2 + offset,
               posY: u * 6 + offset,
               width: u,
-              height: u * (this.maxUY - 12) - offset * 2
+              height: u * (this.charUnitH - 12) - offset * 2
             },
             {
               type: "rect",
-              posX: u * ((this.maxUX - 1) / 2 - 2),
+              posX: u * ((this.charUnitW - 1) / 2 - 2),
               posY: u * 6 + offset,
               width: u,
-              height: u * (this.maxUY - 12) - offset * 2
+              height: u * (this.charUnitH - 12) - offset * 2
             },
             {
               type: "rect",
               posX: u * 3 + offset,
-              posY: u * (this.maxUY - 6) - offset,
-              width: u * ((this.maxUX - 11) / 2) - offset,
+              posY: u * (this.charUnitH - 6) - offset,
+              width: u * ((this.charUnitW - 11) / 2) - offset,
               height: u
             },
             // 右目
             {
               type: "rect",
-              posX: u * ((this.maxUX - 1) / 2 + 3),
+              posX: u * ((this.charUnitW - 1) / 2 + 3),
               posY: u * 5 + offset,
-              width: u * ((this.maxUX - 11) / 2) - offset,
+              width: u * ((this.charUnitW - 11) / 2) - offset,
               height: u
             },
             {
               type: "rect",
-              posX: u * ((this.maxUX - 1) / 2 + 2),
+              posX: u * ((this.charUnitW - 1) / 2 + 2),
               posY: u * 6 + offset,
               width: u,
-              height: u * (this.maxUY - 12) - offset * 2
+              height: u * (this.charUnitH - 12) - offset * 2
             },
             {
               type: "rect",
-              posX: u * (this.maxUX - 3) - offset,
+              posX: u * (this.charUnitW - 3) - offset,
               posY: u * 6 + offset,
               width: u,
-              height: u * (this.maxUY - 12) - offset * 2
+              height: u * (this.charUnitH - 12) - offset * 2
             },
             {
               type: "rect",
-              posX: u * ((this.maxUX - 1) / 2 + 3),
-              posY: u * (this.maxUY - 6) - offset,
-              width: u * ((this.maxUX - 11) / 2) - offset,
+              posX: u * ((this.charUnitW - 1) / 2 + 3),
+              posY: u * (this.charUnitH - 6) - offset,
+              width: u * ((this.charUnitW - 11) / 2) - offset,
               height: u
             }
           );

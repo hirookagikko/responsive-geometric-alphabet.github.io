@@ -67,70 +67,19 @@ function draw() {
   textMask2.filter(INVERT);
 
   composeRGA({
-    givenText: "RESPONSIVE", // テキスト文字列
-    posX: width / 10, // X軸方向の位置
-    posY: height / 10, // Y軸方向の位置
-    width: width - width / 5, // 領域の幅
-    height: height / 4, // 領域の高さ
-    thickness: 10, // 文字の太さ
-    strokeWeight: 2, // 線幅
-    line: "line-per-word", // 改行モード
-    valign: "baseline", // 文字揃え "baseline", ...
-    charHeight: "full", // 文字高の種類 "full", "random"
-    style: "rounded", // 書体スタイル "bitmap", "rounded", ...
-    option: "outlined", // オプション "normal", "outlined"
-    color: "#FF0000", // 色
-    target: false // レンダリングターゲット
-  });
-
-  composeRGA({
-    givenText: "GEOMETRIC", // テキスト文字列
-    posX: width / 4, // X軸方向の位置
-    posY: height / 4, // Y軸方向の位置
-    width: width / 2, // 領域の幅
-    height: height / 2, // 領域の高さ
-    thickness: 10, // 文字の太さ
-    strokeWeight: 1, // 線幅
-    line: "line-per-word", // 改行モード
-    valign: "baseline", // 文字揃え "baseline", ...
-    charHeight: "full", // 文字高の種類 "full", "random"
-    style: "rounded", // 書体スタイル "bitmap", "rounded", ...
-    option: "outlined", // オプション "normal", "outlined"
-    color: "#0000FF", // 色
-    target: false // レンダリングターゲット
-  });
-
-  composeRGA({
-    givenText: "ALPHABET", // テキスト文字列
-    posX: width / 8, // X軸方向の位置
-    posY: height / 2, // Y軸方向の位置
-    width: width - width / 4, // 領域の幅
-    height: height / 10, // 領域の高さ
-    thickness: 10, // 文字の太さ
-    strokeWeight: 3, // 線幅
-    line: "line-per-word", // 改行モード
-    valign: "baseline", // 文字揃え "baseline", ...
-    charHeight: "full", // 文字高の種類 "full", "random"
-    style: "bitmap", // 書体スタイル "bitmap", "rounded", ...
-    option: "outlined", // オプション "normal", "outlined"
-    color: "#FFFFFF", // 色
-    target: false // レンダリングターゲット
-  });
-
-  composeRGA({
-    givenText: givenText, // テキスト文字列
+    givenText: "VERTICAL ALIGN: BOTTOM", // テキスト文字列
     posX: width / 20, // X軸方向の位置
-    posY: height - height / 5, // Y軸方向の位置
+    posY: height / 20, // Y軸方向の位置
     width: width - width / 10, // 領域の幅
-    height: height / 8, // 領域の高さ
+    height: height - height / 10, // 領域の高さ
     thickness: 10, // 文字の太さ
     strokeWeight: 1, // 線幅
     line: "line-per-word", // 改行モード
-    valign: "baseline", // 文字揃え "baseline", ...
+    valign: "bottom", // 文字揃え "top", "middle", "bottom", "baseline", ...
     charHeight: "full", // 文字高の種類 "full", "random"
     style: "rounded", // 書体スタイル "bitmap", "rounded", ...
     option: "normal", // オプション "normal", "outlined"
-    color: "#FFFF00", // 色
+    color: "#FFFFFF", // 色
     target: false // レンダリングターゲット
   });
 
