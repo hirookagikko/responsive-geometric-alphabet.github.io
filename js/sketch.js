@@ -66,20 +66,56 @@ function draw() {
   textMask2.copy(textMask1, 0, 0, width, height, 0, 0, width, height);
   textMask2.filter(INVERT);
 
+  const lineHeight = (height - height / 20) / 3;
   composeRGA({
-    givenText: "VERTICAL ALIGN: BOTTOM", // テキスト文字列
+    givenText: "VERTICAL-ALIGN:TOP", // テキスト文字列
     posX: width / 20, // X軸方向の位置
     posY: height / 20, // Y軸方向の位置
     width: width - width / 10, // 領域の幅
-    height: height - height / 10, // 領域の高さ
-    thickness: 10, // 文字の太さ
+    height: lineHeight, // 領域の高さ
+    thickness: 5, // 文字の太さ
+    strokeWeight: 1, // 線幅
+    line: "line-per-word", // 改行モード
+    valign: "top", // 文字揃え "top", "middle", "bottom", "baseline", ...
+    charHeight: "random", // 文字高の種類 "full", "random"
+    style: "bitmap", // 書体スタイル "bitmap", "rounded", ...
+    option: "normal", // オプション "normal", "outlined"
+    colorFill: "#FFFFFF", // 塗り色
+    colorStroke: "#FF0000", // 線色
+    target: false // レンダリングターゲット
+  });
+  composeRGA({
+    givenText: "VERTICAL-ALIGN:MIDDLE", // テキスト文字列
+    posX: width / 20, // X軸方向の位置
+    posY: height / 2 - lineHeight / 2, // Y軸方向の位置
+    width: width - width / 10, // 領域の幅
+    height: lineHeight, // 領域の高さ
+    thickness: 5, // 文字の太さ
+    strokeWeight: 1, // 線幅
+    line: "line-per-word", // 改行モード
+    valign: "middle", // 文字揃え "top", "middle", "bottom", "baseline", ...
+    charHeight: "random", // 文字高の種類 "full", "random"
+    style: "bitmap", // 書体スタイル "bitmap", "rounded", ...
+    option: "normal", // オプション "normal", "outlined"
+    colorFill: "#FFFFFF", // 塗り色
+    colorStroke: "#FF0000", // 線色
+    target: false // レンダリングターゲット
+  });
+  composeRGA({
+    givenText: "VERTICAL-ALIGN:BOTTOM", // テキスト文字列
+    posX: width / 20, // X軸方向の位置
+    posY: lineHeight * 2, // Y軸方向の位置
+    width: width - width / 10, // 領域の幅
+    height: lineHeight, // 領域の高さ
+    thickness: 5, // 文字の太さ
     strokeWeight: 1, // 線幅
     line: "line-per-word", // 改行モード
     valign: "bottom", // 文字揃え "top", "middle", "bottom", "baseline", ...
-    charHeight: "full", // 文字高の種類 "full", "random"
-    style: "rounded", // 書体スタイル "bitmap", "rounded", ...
+    charHeight: "random", // 文字高の種類 "full", "random"
+    style: "bitmap", // 書体スタイル "bitmap", "rounded", ...
     option: "normal", // オプション "normal", "outlined"
-    color: "#FFFFFF", // 色
+    colorFill: "#FFFFFF", // 塗り色
+    colorStroke: "#FF0000", // 線色
     target: false // レンダリングターゲット
   });
 

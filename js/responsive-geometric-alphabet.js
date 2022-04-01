@@ -4,11 +4,7 @@
 const RGAs = new Array();
 
 // 文字を組む
-const composeRGA = (RGAmode) => {
-
-  // posX, posY初期値（起点）
-  const defPosX = RGAmode.posX;
-  const defPosY = RGAmode.posY;
+const composeRGA = RGAmode => {
 
   // テキスト処理 行に分割して配列化
   let lines = [];
@@ -83,13 +79,24 @@ const composeRGA = (RGAmode) => {
 
       // _rがあるときはprint(),ないときはdraw()
       if (!RGAmode.target) {
-        noFill();
-        stroke(RGAmode.color);
+        fill(RGAmode.colorFill);
+        noStroke();
         push();
-        if (RGAmode.charHeight === "random" && RGAmode.valign === "bottom") {
-          translate(posX, posY + (lineHeight - unit * charUnitH));
-        } else {
-          translate(posX, posY);
+        switch(RGAmode.valign) {
+          case "top":
+            translate(posX, posY);
+            break;
+          case "middle":
+            translate(posX, posY + (lineHeight - unit * charUnitH) / 2);
+            break;
+          case "bottom":
+            translate(posX, posY + (lineHeight - unit * charUnitH));
+            break;
+          case "baseline":
+            break;
+          default:
+            translate(posX, posY);
+            break;
         }
         RGAs[index][c].draw();
         pop();
