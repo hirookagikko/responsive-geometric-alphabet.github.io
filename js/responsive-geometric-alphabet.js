@@ -46,6 +46,7 @@ const composeRGA = RGAmode => {
       offsetY = lineHeight + lineGap; // 行送り
       // 文字揃え
       switch(RGAmode.valign) {
+        // RGAsに格納するのは高さと幅だけでいいかも、描画時に揃えに応じて差分を上に足すのがいいかな
         case "top":
           translate(posX, posY);
           break;
