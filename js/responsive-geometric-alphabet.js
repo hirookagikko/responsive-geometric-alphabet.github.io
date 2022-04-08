@@ -1,58 +1,33 @@
 // Responsive Geometric Alphabet
 
-// RGAインスタンスを入れる配列を用意
-const RGAs = new Array();
+//
+let RGAs = [];
 
 // 文字を組む
 const composeRGA = RGAmode => {
 
-  // テキスト処理 行に分割して配列化
-  let lines = [];
-  let lineCount = 0;
-  for (const char in RGAmode.givenText) {
-    if (!lines[lineCount]) {
-      lines[lineCount] = "";
-    }
-    // 改行モードによって処理を分岐
-    switch(RGAmode.line) {
-      case("line-per-word"): // 単語ごとに分割する場合
-        if (RGAmode.givenText[char].match(/\s+/)) {
-          lineCount++;
-        } else {
-          lines[lineCount] += RGAmode.givenText[char];
-        }
-        if (RGAmode.givenText[char].match(/[.,!?]/g)) {
-          lineCount++;
-        }
-        break;
-      default:
-        // 成り行き流し込みの場合の処理を書く
-        break;
-    }
-  }
+  // 行に分割
+  const lines = RGAmode.givenText.split(/\s+/);
 
   // 文字配置のための変数
+  const width = RGAmode.width;
+  const height = RGAmode.height;
+  const unit = RGAmode.thickness;
   let posX = RGAmode.posX;
   let posY = RGAmode.posY;
-  let width = RGAmode.width;
-  let height = RGAmode.height;
   let style = RGAmode.style;
   let option = RGAmode.option;
-  let strokeWeight = RGAmode.strokeWeight;
+  let drawStrokeWeight = RGAmode.strokeWeight;
   let charUnitW, charUnitH, offsetX, offsetY;
-  let lineGap = RGAmode.thickness;
+  const lineGap = RGAmode.thickness;
   let letterSpacing = RGAmode.thickness;
-
-  // 最大文字数の判定
-  const unit = RGAmode.thickness;
-  const lineLengths = lines.map(line => line.length);
-  const maxLineLength = Math.max(...lineLengths); // 行の最大文字数はどこに活用？
+  const target = RGAmode.target;
   const lineHeight = (height - lineGap * (lines.length - 1)) / lines.length;
 
-  // 行ごとに配列化
-  lines.forEach(function(line, index) {
-    RGAs.push([index]);
-    for (let c = 0;c < line.length;c++) {
+  // テキスト処理
+  let tempArr = [];
+  lines.map(line => {
+    line.split("").forEach((char, index) => {
       switch(RGAmode.line) {
         case "line-per-word":
           charUnitW = (width - (unit * (line.length - 1))) / line.length / unit;
@@ -61,62 +36,46 @@ const composeRGA = RGAmode => {
           // line-per-wordと成り行き流し込み（default）だけあればいい気がしてきた
           break;
       }
-
       // 文字の高さモードがランダムの場合
       if (RGAmode.charHeight == "random") {
         charUnitH = random(5, lineHeight / unit);
       } else {
         charUnitH = lineHeight / unit;
       }
-
       offsetX = unit * charUnitW + letterSpacing; // 文字送り
       offsetY = lineHeight + lineGap; // 行送り
-      console.log(`char: ${line[c]}, unit: ${unit}, charUnitW: ${charUnitW}, charUnitH: ${charUnitH}, mode: ${RGAmode.line}, strokeWeight: ${RGAmode.strokeWeight}, r: ${RGAmode.target}`);
-      RGAs[index][c] = new RGAlphabet(line[c], unit, posX, posY, charUnitW, charUnitH, style, option, strokeWeight);
-
-      // 文字を生成して格納
-      RGAs[index][c].compose();
-
-      // _rがあるときはprint(),ないときはdraw()
-      if (!RGAmode.target) {
-        fill(RGAmode.colorFill);
-        noStroke();
-        push();
-        switch(RGAmode.valign) {
-          case "top":
-            translate(posX, posY);
-            break;
-          case "middle":
-            translate(posX, posY + (lineHeight - unit * charUnitH) / 2);
-            break;
-          case "bottom":
-            translate(posX, posY + (lineHeight - unit * charUnitH));
-            break;
-          case "baseline":
-            break;
-          default:
-            translate(posX, posY);
-            break;
-        }
-        RGAs[index][c].draw();
-        pop();
-      } else {
-        RGAmode.target.push();
-        RGAmode.target.translate();
-        RGAs[index][c].print();
-        RGAmode.target.pop();
+      // 文字揃え
+      switch(RGAmode.valign) {
+        case "top":
+          translate(posX, posY);
+          break;
+        case "middle":
+          translate(posX, posY + (lineHeight - unit * charUnitH) / 2);
+          break;
+        case "bottom":
+          translate(posX, posY + (lineHeight - unit * charUnitH));
+          break;
+        case "baseline":
+          break;
+        default:
+          translate(posX, posY);
+          break;
       }
-      posX += offsetX; // 字送り
-    }
-    if (RGAmode.line == "line-per-word") {
-      posX = RGAmode.posX;
-      posY += lineHeight + lineGap;
-    } else {
-      posX += offsetX / 2;
-    }
+
+      tempArr.push(new RGAlphabet(char, unit, posX, posY, charUnitW, charUnitH, style, option, drawStrokeWeight));
+      posX += offsetX;
+    });
+    posX = RGAmode.posX;
+    posY += lineHeight + lineGap;
+  });
+  RGAs.push(tempArr);
+
+  RGAs.forEach(RGA => {
+    RGA.forEach(char => {
+      char.compose();
+    });
   });
 }
-console.log(RGAs);
 
 class RGAlphabet {
   constructor(_char, _u, _posX, _posY, _charUnitW, _charUnitH, _style, _option, _strokeWeight) {
@@ -6410,72 +6369,36 @@ class RGAlphabet {
     }
   }
   print() {
-    if (this.r === undefined) {
-      if (this.style == "bitmap") {
-        if (this.option == "outline") {
-          stroke(0);
-          strokeWeight(this.strokeWeight);
-          fill(0);
-        } else {
-          noStroke();
-          fill(0);
-        }
-        this.draw();
-        if (this.option == "outline") {
-          noStroke();
-          fill(255);
-          this.draw();
-        }
-      }
-
-      if (this.style == "rounded") {
+    if (this.style == "bitmap") {
+      if (this.option == "outline") {
         stroke(0);
-        noFill();
-        if (this.option == "outline") {
-          strokeWeight(this.u + this.strokeWeight);
-        } else {
-          strokeWeight(this.strokeWeight);
-        }
-        this.draw();
-        if (this.option == "outline") {
-          stroke(255);
-          strokeWeight(this.strokeWeight);
-          this.draw();
-        }
+        strokeWeight(this.strokeWeight);
+        fill(0);
+      } else {
+        noStroke();
+        fill(0);
       }
-    } else {
-      const r = this.r;
-      if (this.style == "bitmap") {
-        if (this.option == "outline") {
-          r.stroke(0);
-          r.strokeWeight(this.strokeWeight);
-          r.fill(0);
-        } else {
-          r.noStroke();
-          r.fill(0);
-        }
+      this.draw();
+      if (this.option == "outline") {
+        noStroke();
+        fill(255);
         this.draw();
-        if (this.option == "outline") {
-          r.noStroke();
-          r.fill(255);
-          this.draw();
-        }
       }
+    }
 
-      if (this.style == "rounded") {
-        r.stroke(0);
-        r.noFill();
-        if (this.option == "outline") {
-          r.strokeWeight(this.u + this.strokeWeight);
-        } else {
-          r.strokeWeight(this.strokeWeight);
-        }
+    if (this.style == "rounded") {
+      stroke(0);
+      noFill();
+      if (this.option == "outline") {
+        strokeWeight(this.u + this.strokeWeight);
+      } else {
+        strokeWeight(this.strokeWeight);
+      }
+      this.draw();
+      if (this.option == "outline") {
+        stroke(255);
+        strokeWeight(this.strokeWeight);
         this.draw();
-        if (this.option == "outline") {
-          r.stroke(255);
-          r.strokeWeight(this.strokeWeight);
-          this.draw();
-        }
       }
     }
   }

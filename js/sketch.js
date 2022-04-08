@@ -18,6 +18,7 @@ function generate() {
 function draw() {
   let inputValue = input.value();
   noLoop();
+  frameRate(20);
   background(0);
   pixelDensity(2);
   const gridSize = height / 200;
@@ -41,8 +42,8 @@ function draw() {
   // patternAngle(0);
   // patternColors([selectedPalette1[0], selectedPalette1[1]]);
   // rectPattern(0, 0, width, height);
-  fill(color("#000000"));
-  rect(0, 0, width, height);
+  // fill(color("#000000"));
+  // rect(0, 0, width, height);
 
   // 2パターン用グラフィック
   const pg1 = createGraphics(width, height);
@@ -66,9 +67,14 @@ function draw() {
   textMask2.copy(textMask1, 0, 0, width, height, 0, 0, width, height);
   textMask2.filter(INVERT);
 
+  const maskedBG1 = pgMask(pg1, textMask1);
+  image(maskedBG1, 0, 0);
+  const maskedBG2 = pgMask(pg2, textMask2);
+  image(maskedBG2, 0, 0);
+
   const lineHeight = (height - height / 20) / 3;
   composeRGA({
-    givenText: "VERTICAL-ALIGN:TOP", // テキスト文字列
+    givenText: "VERTICAL-ALIGN: TOP", // テキスト文字列
     posX: width / 20, // X軸方向の位置
     posY: height / 20, // Y軸方向の位置
     width: width - width / 10, // 領域の幅
@@ -78,11 +84,11 @@ function draw() {
     line: "line-per-word", // 改行モード
     valign: "top", // 文字揃え "top", "middle", "bottom", "baseline", ...
     charHeight: "random", // 文字高の種類 "full", "random"
-    style: "bitmap", // 書体スタイル "bitmap", "rounded", ...
+    style: "rounded", // 書体スタイル "bitmap", "rounded", ...
     option: "normal", // オプション "normal", "outlined"
     colorFill: "#FFFFFF", // 塗り色
     colorStroke: "#FF0000", // 線色
-    target: false // レンダリングターゲット
+    target: null // レンダリングターゲット
   });
   composeRGA({
     givenText: "VERTICAL-ALIGN:MIDDLE", // テキスト文字列
@@ -91,7 +97,7 @@ function draw() {
     width: width - width / 10, // 領域の幅
     height: lineHeight, // 領域の高さ
     thickness: 5, // 文字の太さ
-    strokeWeight: 1, // 線幅
+    strokeWeight: 2, // 線幅
     line: "line-per-word", // 改行モード
     valign: "middle", // 文字揃え "top", "middle", "bottom", "baseline", ...
     charHeight: "random", // 文字高の種類 "full", "random"
@@ -99,7 +105,7 @@ function draw() {
     option: "normal", // オプション "normal", "outlined"
     colorFill: "#FFFFFF", // 塗り色
     colorStroke: "#FF0000", // 線色
-    target: false // レンダリングターゲット
+    target: null // レンダリングターゲット
   });
   composeRGA({
     givenText: "VERTICAL-ALIGN:BOTTOM", // テキスト文字列
@@ -107,23 +113,37 @@ function draw() {
     posY: lineHeight * 2, // Y軸方向の位置
     width: width - width / 10, // 領域の幅
     height: lineHeight, // 領域の高さ
-    thickness: 5, // 文字の太さ
+    thickness: 10, // 文字の太さ
     strokeWeight: 1, // 線幅
     line: "line-per-word", // 改行モード
     valign: "bottom", // 文字揃え "top", "middle", "bottom", "baseline", ...
     charHeight: "random", // 文字高の種類 "full", "random"
-    style: "bitmap", // 書体スタイル "bitmap", "rounded", ...
+    style: "rounded", // 書体スタイル "bitmap", "rounded", ...
     option: "normal", // オプション "normal", "outlined"
     colorFill: "#FFFFFF", // 塗り色
     colorStroke: "#FF0000", // 線色
-    target: false // レンダリングターゲット
+    target: textMask1 // レンダリングターゲット
   });
-
-  const maskedBG1 = pgMask(pg1, textMask1);
-  image(maskedBG1, 0, 0);
-  const maskedBG2 = pgMask(pg2, textMask2);
-  image(maskedBG2, 0, 0);
-
+  console.log(RGAs);
+  RGAs.forEach(RGA => {
+    RGA.forEach(char => {
+      if (RGA.target === null) {
+        noFill();
+        stroke(RGAmode.colorStroke);
+        push();
+        translate(char.posX, char.posY);
+        console.log(char.posX, char.posY);
+        rect(char.posX, char.posY, 200, 200);
+        char.draw();
+        pop();
+      } else {
+        // target.push();
+        // target.translate(posX, posY);
+        // char.print();
+        // target.pop();
+      }
+    });
+  });
   textMask1.remove();
   textMask2.remove();
   pg1.remove();
