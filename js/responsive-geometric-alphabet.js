@@ -1,28 +1,30 @@
 // Responsive Geometric Alphabet
 
-//
+// 格納のための配列
 let RGAs = [];
 
 // 文字を組む
 const composeRGA = RGAmode => {
+  // インスタンスのID
+  const id = RGAmode.id;
 
   // 行に分割
   const lines = RGAmode.givenText.split(/\s+/);
 
-  // 文字配置のための変数
+  // 文字配置の用意
   const width = RGAmode.width;
   const height = RGAmode.height;
   const unit = RGAmode.thickness;
+  const lineGap = RGAmode.thickness;
+  const target = RGAmode.target;
+  const lineHeight = (height - lineGap * (lines.length - 1)) / lines.length;
   let posX = RGAmode.posX;
   let posY = RGAmode.posY;
   let style = RGAmode.style;
   let option = RGAmode.option;
   let drawStrokeWeight = RGAmode.strokeWeight;
   let charUnitW, charUnitH, offsetX, offsetY;
-  const lineGap = RGAmode.thickness;
   let letterSpacing = RGAmode.thickness;
-  const target = RGAmode.target;
-  const lineHeight = (height - lineGap * (lines.length - 1)) / lines.length;
 
   // テキスト処理
   let tempArr = [];
@@ -44,24 +46,6 @@ const composeRGA = RGAmode => {
       }
       offsetX = unit * charUnitW + letterSpacing; // 文字送り
       offsetY = lineHeight + lineGap; // 行送り
-      // 文字揃え
-      switch(RGAmode.valign) {
-        // RGAsに格納するのは高さと幅だけでいいかも、描画時に揃えに応じて差分を上に足すのがいいかな
-        case "top":
-          translate(posX, posY);
-          break;
-        case "middle":
-          translate(posX, posY + (lineHeight - unit * charUnitH) / 2);
-          break;
-        case "bottom":
-          translate(posX, posY + (lineHeight - unit * charUnitH));
-          break;
-        case "baseline":
-          break;
-        default:
-          translate(posX, posY);
-          break;
-      }
 
       tempArr.push(new RGAlphabet(char, unit, posX, posY, charUnitW, charUnitH, style, option, drawStrokeWeight));
       posX += offsetX;
@@ -69,10 +53,10 @@ const composeRGA = RGAmode => {
     posX = RGAmode.posX;
     posY += lineHeight + lineGap;
   });
-  RGAs.push(tempArr);
+  RGAs.push({ id, chars: tempArr, lineHeight: lineHeight, valign: RGAmode.valign, colorFill: RGAmode.colorFill, colorStroke: RGAmode.colorStroke, target: RGAmode.target });
 
   RGAs.forEach(RGA => {
-    RGA.forEach(char => {
+    RGA.chars.forEach(char => {
       char.compose();
     });
   });
@@ -6343,31 +6327,73 @@ class RGAlphabet {
         break;
     }
   }
-  draw() {
+  draw(RGA) {
+    let charOffsetTop = 0;
+    push();
+    translate(this.posX, this.posY);
+
+    // 書体判別
+    switch(this.style) {
+      case "bitmap":
+        if (this.option === "outline") {
+          strokeWeight(this.strokeWeight);
+          fill(RGA.colorFill);
+          stroke(RGA.colorStroke);
+        } else {
+          noStroke();
+          fill(RGA.colorStroke);
+        }
+        break;
+      case "rounded":
+        if (this.option === "outline") {
+          noStroke();
+          fill(RGA.colorFill);
+        } else {
+          strokeWeight(this.u);
+          noFill();
+          stroke(RGA.colorStroke);
+        }
+        break;
+    }
+    switch(RGA.valign) {
+      case "top":
+        break;
+      case "middle":
+        charOffsetTop = (RGA.lineHeight - this.u * this.charUnitH) / 2;
+        break;
+      case "bottom":
+        charOffsetTop = RGA.lineHeight - this.u * this.charUnitH;
+        break;
+      case "baseline":
+        break;
+      default:
+        break;
+    }
     for (const i in this.parts) {
       let p = this.parts[i];
-      strokeWeight(this.strokeWeight);
+      // 文字揃えによって分岐
       switch(p.type) {
         case "rect":
-          rect(p.posX, p.posY, p.width, p.height);
+          rect(p.posX, p.posY + charOffsetTop, p.width, p.height);
           break;
         case "arc":
           if (p.radiusY) {
-            arc(p.posX, p.posY, p.radius, p.radiusY, p.start, p.end);
+            arc(p.posX, p.posY + charOffsetTop, p.radius, p.radiusY, p.start, p.end);
           } else {
-            arc(p.posX, p.posY, p.radius, p.radius, p.start, p.end);
+            arc(p.posX, p.posY + charOffsetTop, p.radius, p.radius, p.start, p.end);
           }
           break;
         case "line":
-          line(p.startPosX, p.startPosY, p.endPosX, p.endPosY);
+          line(p.startPosX, p.startPosY + charOffsetTop, p.endPosX, p.endPosY + charOffsetTop);
           break;
         case "point":
-          point(p.posX, p.posY);
+          point(p.posX, p.posY + charOffsetTop);
           break;
         default:
           break;
       }
     }
+    pop();
   }
   print() {
     if (this.style == "bitmap") {
