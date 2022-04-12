@@ -7,6 +7,61 @@ function setup() {
   button.parent("control");
   button.mousePressed(draw);
   angleMode(DEGREES);
+  const lineHeight = (height - height / 20) / 3;
+  composeRGA({
+    id: 0,
+    givenText: "VERTICAL-ALIGN:TOP", // テキスト文字列
+    posX: width / 20, // X軸方向の位置
+    posY: height / 20, // Y軸方向の位置
+    width: width - width / 10, // 領域の幅
+    height: lineHeight, // 領域の高さ
+    thickness: 2, // 文字の太さ
+    strokeWeight: 1, // 線幅
+    line: "line-per-word", // 改行モード
+    valign: "top", // 文字揃え "top", "middle", "bottom", "baseline", ...
+    charHeight: "random", // 文字高の種類 "full", "random"
+    style: "rounded", // 書体スタイル "bitmap", "rounded", ...
+    option: "normal", // オプション "normal", "outlined"
+    colorFill: "#FFFFFF", // 塗り色
+    colorStroke: "#0000FF", // 線色
+    target: null // レンダリングターゲット
+  });
+  composeRGA({
+    id: 1,
+    givenText: "VERTICAL-ALIGN:MIDDLE", // テキスト文字列
+    posX: width / 20, // X軸方向の位置
+    posY: height / 2 - lineHeight / 2, // Y軸方向の位置
+    width: width - width / 10, // 領域の幅
+    height: lineHeight, // 領域の高さ
+    thickness: 5, // 文字の太さ
+    strokeWeight: 2, // 線幅
+    line: "line-per-word", // 改行モード
+    valign: "middle", // 文字揃え "top", "middle", "bottom", "baseline", ...
+    charHeight: "random", // 文字高の種類 "full", "random"
+    style: "bitmap", // 書体スタイル "bitmap", "rounded", ...
+    option: "normal", // オプション "normal", "outlined"
+    colorFill: "#FFFFFF", // 塗り色
+    colorStroke: "#00FF00", // 線色
+    target: null // レンダリングターゲット
+  });
+  composeRGA({
+    id: 2,
+    givenText: "VERTICAL-ALIGN:BOTTOM", // テキスト文字列
+    posX: width / 20, // X軸方向の位置
+    posY: lineHeight * 2, // Y軸方向の位置
+    width: width - width / 10, // 領域の幅
+    height: lineHeight, // 領域の高さ
+    thickness: 5, // 文字の太さ
+    strokeWeight: 1, // 線幅
+    line: "line-per-word", // 改行モード
+    valign: "bottom", // 文字揃え "top", "middle", "bottom", "baseline", ...
+    charHeight: "random", // 文字高の種類 "full", "random"
+    style: "rounded", // 書体スタイル "bitmap", "rounded", ...
+    option: "normal", // オプション "normal", "outlined"
+    colorFill: "#FFFFFF", // 塗り色
+    colorStroke: "#FF0000", // 線色
+    target: null // レンダリングターゲット
+  });
 }
 
 function generate() {
@@ -17,8 +72,8 @@ function generate() {
 
 function draw() {
   let inputValue = input.value();
-  noLoop();
-  frameRate(20);
+  // noLoop();
+  // frameRate(20);
   background(0);
   pixelDensity(2);
   const gridSize = height / 200;
@@ -71,71 +126,21 @@ function draw() {
   image(maskedBG1, 0, 0);
   const maskedBG2 = pgMask(pg2, textMask2);
   image(maskedBG2, 0, 0);
-  const lineHeight = (height - height / 20) / 3;
-  composeRGA({
-    id: 0,
-    givenText: "VERTICAL-ALIGN: TOP", // テキスト文字列
-    posX: width / 20, // X軸方向の位置
-    posY: height / 20, // Y軸方向の位置
-    width: width - width / 10, // 領域の幅
-    height: lineHeight, // 領域の高さ
-    thickness: 2, // 文字の太さ
-    strokeWeight: 1, // 線幅
-    line: "line-per-word", // 改行モード
-    valign: "top", // 文字揃え "top", "middle", "bottom", "baseline", ...
-    charHeight: "random", // 文字高の種類 "full", "random"
-    style: "rounded", // 書体スタイル "bitmap", "rounded", ...
-    option: "normal", // オプション "normal", "outlined"
-    colorFill: "#FFFFFF", // 塗り色
-    colorStroke: "#0000FF", // 線色
-    target: null // レンダリングターゲット
-  });
-  composeRGA({
-    id: 1,
-    givenText: "VERTICAL-ALIGN:MIDDLE", // テキスト文字列
-    posX: width / 20, // X軸方向の位置
-    posY: height / 2 - lineHeight / 2, // Y軸方向の位置
-    width: width - width / 10, // 領域の幅
-    height: lineHeight, // 領域の高さ
-    thickness: 5, // 文字の太さ
-    strokeWeight: 2, // 線幅
-    line: "line-per-word", // 改行モード
-    valign: "middle", // 文字揃え "top", "middle", "bottom", "baseline", ...
-    charHeight: "random", // 文字高の種類 "full", "random"
-    style: "bitmap", // 書体スタイル "bitmap", "rounded", ...
-    option: "normal", // オプション "normal", "outlined"
-    colorFill: "#FFFFFF", // 塗り色
-    colorStroke: "#00FF00", // 線色
-    target: null // レンダリングターゲット
-  });
-  composeRGA({
-    id: 2,
-    givenText: "VERTICAL-ALIGN:BOTTOM", // テキスト文字列
-    posX: width / 20, // X軸方向の位置
-    posY: lineHeight * 2, // Y軸方向の位置
-    width: width - width / 10, // 領域の幅
-    height: lineHeight, // 領域の高さ
-    thickness: 5, // 文字の太さ
-    strokeWeight: 1, // 線幅
-    line: "line-per-word", // 改行モード
-    valign: "bottom", // 文字揃え "top", "middle", "bottom", "baseline", ...
-    charHeight: "random", // 文字高の種類 "full", "random"
-    style: "rounded", // 書体スタイル "bitmap", "rounded", ...
-    option: "normal", // オプション "normal", "outlined"
-    colorFill: "#FFFFFF", // 塗り色
-    colorStroke: "#FF0000", // 線色
-    target: null // レンダリングターゲット
-  });
   console.log(RGAs);
+
   RGAs.forEach(RGA => {
     if (RGA.target === null) {
       RGA.chars.forEach(char => {
+        char.u = random(1, 5);
+        char.charUnitH = random(6,70);
+        char.compose();
         char.draw(RGA);
       });
     } else {
       char.print(RGA.target);
     }
   });
+
   textMask1.remove();
   textMask2.remove();
   pg1.remove();

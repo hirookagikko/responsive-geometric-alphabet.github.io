@@ -6355,6 +6355,8 @@ class RGAlphabet {
         }
         break;
     }
+
+    // 文字揃え判別
     switch(RGA.valign) {
       case "top":
         break;
@@ -6369,9 +6371,7 @@ class RGAlphabet {
       default:
         break;
     }
-    for (const i in this.parts) {
-      let p = this.parts[i];
-      // 文字揃えによって分岐
+    this.parts.forEach(p => {
       switch(p.type) {
         case "rect":
           rect(p.posX, p.posY + charOffsetTop, p.width, p.height);
@@ -6392,7 +6392,7 @@ class RGAlphabet {
         default:
           break;
       }
-    }
+    });
     pop();
   }
   print() {
